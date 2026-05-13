@@ -1,0 +1,73 @@
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# --- Logs / runtime ---
+*.log
+logs/
+*.pid
+*.pid.lock
+
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# --- SQL / database local files ---
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+*.sql.backup
+*.dump
+
+# --- React + Vite ---
+node_modules/
+dist/
+dist-ssr/
+coverage/
+.vite/
+.eslintcache
+vite.svg
+
+# --- Spring Boot / Gradle ---
+.gradle/
+build/
+**/build/
+out/
+HELP.md
+.classpath
+.project
+.settings/
+.factorypath
+.springBeans
+.sts4-cache/
+
+# --- Hyperledger Fabric / chaincode artifacts ---
+fabric-samples/
+crypto-config/
+channel-artifacts/
+system-genesis-block/
+organizations/
+wallet/
+*.block
+*.tx
+*.tar.gz
+
+# --- Docker / Compose local state ---
+docker-data/
+volumes/
+.docker/
+docker-compose.override.yml
+compose.override.yml
+override.yml
+
