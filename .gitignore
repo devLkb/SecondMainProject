@@ -40,13 +40,17 @@ coverage/
 .eslintcache
 vite.svg
 
+# --- Local docs / design files (README.md 제외) ---
+*.md
+!README.md
+*.html
+
 # --- Spring Boot / Gradle ---
 .gradle/
 .gradle-home/
 build/
 **/build/
 out/
-HELP.md
 .classpath
 .project
 .settings/
