@@ -59,7 +59,7 @@ const initState = {
   verifyCount: 0,
   ptLog: [],
   verifiedRecords: [],
-
+  flaggedRecords: [], 
   // 플랫폼 상태
   orgs: [
     { id: 'hosp-001', name: '행복동물병원', type: '병원',  fabricOrg: 'HospitalA',  date: '2024.01.10', status: 'active' },

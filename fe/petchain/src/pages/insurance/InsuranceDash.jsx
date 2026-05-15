@@ -2,14 +2,30 @@ import { useState } from 'react'
 import DashNav from '../../components/common/DashNav'
 import { useApp } from '../../context/AppContext'
 
+// 이상 신고 사유 목록
+const FLAG_REASONS = [
+  { code: 'DUPLICATE_SUSPECTED',    label: '중복 청구 의심' },
+  { code: 'COST_INCONSISTENT',      label: '진료비 불일치' },
+  { code: 'DIAGNOSIS_MISMATCH',     label: '진단 코드 불일치' },
+  { code: 'TREATMENT_UNREASONABLE', label: '진료 행위 부적절' },
+  { code: 'DOCUMENT_SUSPICIOUS',    label: '서류 위조 의심' },
+  { code: 'OTHER',                  label: '기타' },
+]
+
 export default function InsuranceDash({ showToast, onLogout }) {
   const { state, setState } = useApp()
-  const [tab, setTab]          = useState('list')
+  const [tab, setTab]               = useState('list')
   const [lastVerified, setLastVerified] = useState(null)
+
+  // 이상 신고 모달 상태
+  const [flagModal, setFlagModal]   = useState(null)  // null | verifiedRecord
+  const [flagReason, setFlagReason] = useState('')
+  const [flagNote, setFlagNote]     = useState('')
 
   const activeConsents  = Object.values(state.consents).filter(c => c.status === 'active')
   const revokedConsents = Object.values(state.consents).filter(c => c.status === 'revoked')
 
+  /* ── 검증 API 호출 ── */
   const handleVerify = (c) => {
     if (state.ptBalance <= 0) {
       showToast('포인트 부족', '플랫폼에 포인트 충전을 요청하세요.')
@@ -21,6 +37,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
       recordId: c.recordId, pet: c.pet, disease: c.disease,
       cost: c.cost, hospital: c.hospital,
       status: 'PASSED', verifiedAt: new Date().toLocaleString(),
+      reviewStatus: null,   // null | APPROVED | REJECTED | FLAGGED
     }
     setState(s => ({
       ...s,
@@ -32,9 +49,69 @@ export default function InsuranceDash({ showToast, onLogout }) {
       ptLog: [{ date: '지금', claim: c.recordId, desc: '검증 API 호출', pt: -1 }, ...s.ptLog],
     }))
     setLastVerified(result)
-    showToast('검증 완료', `PASSED — 포인트 차감 (-1)`)
+    showToast('검증 완료', 'PASSED — 포인트 차감 (-1)')
     setTab('result')
   }
+
+  /* ── 심사 결과 기록 ── */
+  const handleReview = (status) => {
+    if (!lastVerified) return
+    setState(s => ({
+      ...s,
+      verifiedRecords: s.verifiedRecords.map(r =>
+        r.verificationId === lastVerified.verificationId
+          ? { ...r, reviewStatus: status }
+          : r
+      ),
+      txLog: [{ time: new Date().toLocaleTimeString(), type: '심사', org: 'ins-001', desc: `${lastVerified.recordId} — ${status}` }, ...s.txLog],
+    }))
+    setLastVerified(prev => ({ ...prev, reviewStatus: status }))
+    showToast('심사 완료', `${status} — 원장 기록 완료`)
+  }
+
+  /* ── 이상 신고 제출 ── */
+  const handleFlag = () => {
+    if (!flagReason) { showToast('오류', '신고 사유를 선택하세요'); return }
+    const flagEntry = {
+      flagId:         `FLAG-${crypto.randomUUID().slice(0,8).toUpperCase()}`,
+      verificationId: flagModal.verificationId,
+      recordId:       flagModal.recordId,
+      pet:            flagModal.pet,
+      hospital:       flagModal.hospital,
+      disease:        flagModal.disease,
+      cost:           flagModal.cost,
+      reasonCode:     flagReason,
+      reasonLabel:    FLAG_REASONS.find(r => r.code === flagReason)?.label,
+      note:           flagNote,
+      flaggedAt:      new Date().toLocaleString(),
+      status:         'PENDING',   // PENDING | REVIEWING | RESOLVED
+      reportedBy:     'ins-001',
+    }
+    setState(s => ({
+      ...s,
+      flaggedRecords: [flagEntry, ...(s.flaggedRecords || [])],
+      verifiedRecords: s.verifiedRecords.map(r =>
+        r.verificationId === flagModal.verificationId
+          ? { ...r, reviewStatus: 'FLAGGED' }
+          : r
+      ),
+      txLog: [{ time: new Date().toLocaleTimeString(), type: '신고', org: 'ins-001', desc: `${flagModal.recordId} — 이상 신고 전달 (${flagEntry.reasonLabel})` }, ...s.txLog],
+    }))
+    if (lastVerified?.verificationId === flagModal.verificationId) {
+      setLastVerified(prev => ({ ...prev, reviewStatus: 'FLAGGED' }))
+    }
+    showToast('이상 신고 완료', `플랫폼에 전달됨 — ${flagEntry.flagId}`)
+    setFlagModal(null)
+    setFlagReason('')
+    setFlagNote('')
+  }
+
+  /* ── 심사 결과 배지 ── */
+  const reviewBadge = (status) => ({
+    APPROVED: <span className="badge badge-success">APPROVED</span>,
+    REJECTED: <span className="badge badge-danger">REJECTED</span>,
+    FLAGGED:  <span className="badge badge-warning">⚠️ FLAGGED</span>,
+  }[status] || <span className="badge badge-muted">미기록</span>)
 
   return (
     <>
@@ -57,7 +134,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
             {activeConsents.length === 0 ? (
               <div className="card" style={{ textAlign: 'center', padding: 72 }}>
                 <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
-                <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 10, color: 'var(--text)' }}>검증 가능한 기록이 없습니다</div>
+                <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 10 }}>검증 가능한 기록이 없습니다</div>
                 <div style={{ fontSize: 14, color: 'var(--muted)' }}>보호자가 동의 토글을 ON해야 이 목록에 표시됩니다</div>
               </div>
             ) : (
@@ -119,7 +196,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
         {tab === 'result' && (
           <div className="fade-in">
             <div className="pane-h">검증 결과</div>
-            <div className="pane-sub">verification_logs — 검증 API 호출 이력</div>
+            <div className="pane-sub">verification_logs — 보험사 내부 심사 후 이상 건은 플랫폼에 신고합니다</div>
 
             {state.verifiedRecords.length === 0 ? (
               <div className="card" style={{ textAlign: 'center', padding: 72, color: 'var(--muted)' }}>
@@ -128,22 +205,33 @@ export default function InsuranceDash({ showToast, onLogout }) {
             ) : (
               <>
                 {lastVerified && (
-                  <div className="card fade-in" style={{ borderTop: '3px solid var(--success)', marginBottom: 22 }}>
+                  <div className="card fade-in" style={{
+                    borderTop: `3px solid ${lastVerified.reviewStatus === 'FLAGGED' ? 'var(--warning)' : 'var(--success)'}`,
+                    marginBottom: 22,
+                  }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
                       <div style={{
                         width: 50, height: 50, borderRadius: 14,
-                        background: 'var(--success-xl)', display: 'flex',
-                        alignItems: 'center', justifyContent: 'center', fontSize: 24
-                      }}>✅</div>
+                        background: lastVerified.reviewStatus === 'FLAGGED' ? 'var(--warning-xl)' : 'var(--success-xl)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+                      }}>
+                        {lastVerified.reviewStatus === 'FLAGGED' ? '⚠️' : '✅'}
+                      </div>
                       <div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--success)' }}>검증 통과</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: lastVerified.reviewStatus === 'FLAGGED' ? 'var(--warning)' : 'var(--success)' }}>
+                          {lastVerified.reviewStatus === 'FLAGGED' ? '이상 신고 완료' : '검증 통과'}
+                        </div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                           status: PASSED · {lastVerified.verifiedAt}
                         </div>
                       </div>
-                      <span className="badge badge-warning" style={{ marginLeft: 'auto' }}>포인트 -1</span>
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {reviewBadge(lastVerified.reviewStatus)}
+                        <span className="badge badge-warning">포인트 -1</span>
+                      </div>
                     </div>
 
+                    {/* 검증 체크 항목 */}
                     <div className="g2" style={{ marginBottom: 20 }}>
                       {[
                         ['해시 일치', '✓ 정상',    'var(--success)'],
@@ -159,12 +247,14 @@ export default function InsuranceDash({ showToast, onLogout }) {
                     </div>
 
                     <div className="divider" />
+
+                    {/* 진료 상세 */}
                     <div className="g2" style={{ fontSize: 14, marginBottom: 20 }}>
                       {[
-                        ['반려동물',      lastVerified.pet,                          false],
-                        ['질병코드',      lastVerified.disease,                      true],
-                        ['진료비',        `${lastVerified.cost.toLocaleString()}원`, false],
-                        ['verification_id', lastVerified.verificationId,             true],
+                        ['반려동물',        lastVerified.pet,                          false],
+                        ['질병코드',        lastVerified.disease,                      true],
+                        ['진료비',          `${lastVerified.cost.toLocaleString()}원`, false],
+                        ['verification_id', lastVerified.verificationId,               true],
                       ].map(([k, v, mono]) => (
                         <div key={k}>
                           <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>{k}</div>
@@ -173,33 +263,66 @@ export default function InsuranceDash({ showToast, onLogout }) {
                       ))}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <button
-                        className="btn btn-success"
-                        style={{ flex: 1, padding: 12, fontSize: 14 }}
-                        onClick={() => {
-                          setState(s => ({ ...s, txLog: [{ time: new Date().toLocaleTimeString(), type: '심사', org: 'ins-001', desc: 'APPROVED — reviewed_at 기록' }, ...s.txLog] }))
-                          showToast('심사 완료', 'APPROVED — 원장 기록 완료')
-                        }}
-                      >
-                        ✓ 승인 (APPROVED)
-                      </button>
-                      <button
-                        className="btn btn-danger"
-                        style={{ flex: 1, padding: 12, fontSize: 14 }}
-                        onClick={() => showToast('심사 완료', 'REJECTED — 원장 기록 완료')}
-                      >
-                        ✕ 반려 (REJECTED)
-                      </button>
-                    </div>
+                    {/* 심사 결과 버튼 — 아직 결과 미기록인 경우만 */}
+                    {!lastVerified.reviewStatus && (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--muted)', marginBottom: 10 }}>
+                          보험사 내부 심사 후 결과를 선택하세요
+                        </div>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <button
+                            className="btn btn-success"
+                            style={{ flex: 1, padding: 12, fontSize: 14 }}
+                            onClick={() => handleReview('APPROVED')}
+                          >
+                            ✓ 승인 (APPROVED)
+                          </button>
+                          <button
+                            className="btn btn-danger"
+                            style={{ flex: 1, padding: 12, fontSize: 14 }}
+                            onClick={() => handleReview('REJECTED')}
+                          >
+                            ✕ 반려 (REJECTED)
+                          </button>
+                          <button
+                            className="btn btn-warning"
+                            style={{ flex: 1, padding: 12, fontSize: 14, background: 'var(--warning-xl)', color: 'var(--warning)', borderColor: 'var(--warning)' }}
+                            onClick={() => setFlagModal(lastVerified)}
+                          >
+                            ⚠️ 이상 신고
+                          </button>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>
+                          이상 신고는 플랫폼 관리자에게 전달되며, 플랫폼이 병원·보험사와 함께 해당 건을 재검토합니다.
+                        </div>
+                      </>
+                    )}
+
+                    {/* 이미 결과 기록된 경우 */}
+                    {lastVerified.reviewStatus && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--bg-2)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: 13, color: 'var(--muted)' }}>심사 결과 기록됨</span>
+                        {reviewBadge(lastVerified.reviewStatus)}
+                        {lastVerified.reviewStatus !== 'FLAGGED' && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ marginLeft: 'auto' }}
+                            onClick={() => setFlagModal(lastVerified)}
+                          >
+                            ⚠️ 이상 신고
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
+                {/* 전체 검증 이력 */}
                 <div className="card">
                   <div className="card-title">전체 검증 이력</div>
                   <table className="tbl">
                     <thead>
-                      <tr><th>verification_id</th><th>record_id</th><th>결과</th><th>시각</th><th>포인트</th></tr>
+                      <tr><th>verification_id</th><th>record_id</th><th>검증</th><th>심사 결과</th><th>시각</th><th>포인트</th><th></th></tr>
                     </thead>
                     <tbody>
                       {state.verifiedRecords.map((r, i) => (
@@ -207,8 +330,19 @@ export default function InsuranceDash({ showToast, onLogout }) {
                           <td><span className="mono">{r.verificationId}</span></td>
                           <td><span className="mono">{r.recordId}</span></td>
                           <td><span className="badge badge-success">PASSED</span></td>
+                          <td>{reviewBadge(r.reviewStatus)}</td>
                           <td style={{ fontSize: 13, color: 'var(--muted)' }}>{r.verifiedAt}</td>
                           <td style={{ color: 'var(--danger)', fontWeight: 700 }}>-1</td>
+                          <td>
+                            {r.reviewStatus !== 'FLAGGED' && (
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => { setLastVerified(r); setFlagModal(r) }}
+                              >
+                                ⚠️ 신고
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -241,7 +375,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
 
             {state.ptBalance < 100 && (
               <div className="alert alert-warning">
-                ⚠️ 포인트 잔액이 부족합니다. 플랫폼에 충전을 요청하세요.
+                ⚠️ 포인트 잔액이 부족합니다.
                 <button className="btn btn-orange btn-sm" style={{ marginLeft: 'auto' }}>충전 요청</button>
               </div>
             )}
@@ -278,6 +412,88 @@ export default function InsuranceDash({ showToast, onLogout }) {
           </div>
         )}
       </div>
+
+      {/* ── 이상 신고 모달 ── */}
+      {flagModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 32, width: '100%', maxWidth: 480, position: 'relative' }}>
+            <button
+              onClick={() => { setFlagModal(null); setFlagReason(''); setFlagNote('') }}
+              style={{ position: 'absolute', top: 16, right: 18, background: 'none', border: 'none', fontSize: 22, color: '#a1a1aa', cursor: 'pointer' }}
+            >✕</button>
+
+            <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>⚠️ 이상 신고</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+              플랫폼 관리자에게 이상 내용이 전달됩니다
+            </div>
+
+            {/* 신고 대상 요약 */}
+            <div style={{ background: 'var(--bg-2)', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>record_id</span>
+                <span className="mono">{flagModal.recordId}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>반려동물</span>
+                <span style={{ fontWeight: 600 }}>{flagModal.pet}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>병원</span>
+                <span>{flagModal.hospital}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>진료비</span>
+                <span style={{ fontWeight: 600 }}>{flagModal.cost?.toLocaleString()}원</span>
+              </div>
+            </div>
+
+            {/* 신고 사유 선택 */}
+            <label className="fl">신고 사유 <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              {FLAG_REASONS.map(r => (
+                <label key={r.code} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+                  border: `1.5px solid ${flagReason === r.code ? 'var(--warning)' : 'var(--border)'}`,
+                  background: flagReason === r.code ? 'var(--warning-xl)' : '#fff',
+                  transition: 'all .15s',
+                }}>
+                  <input
+                    type="radio" name="flagReason" value={r.code}
+                    checked={flagReason === r.code}
+                    onChange={() => setFlagReason(r.code)}
+                    style={{ accentColor: 'var(--warning)' }}
+                  />
+                  <span style={{ fontSize: 14, fontWeight: flagReason === r.code ? 600 : 400 }}>{r.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {/* 상세 메모 */}
+            <label className="fl">상세 내용 (선택)</label>
+            <textarea
+              className="fi"
+              rows={3}
+              placeholder="이상하다고 판단한 근거나 추가 정보를 입력하세요"
+              value={flagNote}
+              onChange={e => setFlagNote(e.target.value)}
+              style={{ resize: 'vertical' }}
+            />
+
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>
+              📌 신고 후에도 이미 다운로드한 자료는 회수되지 않습니다. 플랫폼이 병원 및 보험사와 함께 해당 건을 재검토합니다.
+            </div>
+
+            <button
+              className="btn btn-warning"
+              style={{ width: '100%', padding: 13, fontSize: 14, fontWeight: 700, background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)', justifyContent: 'center' }}
+              onClick={handleFlag}
+            >
+              플랫폼에 이상 신고 전달
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
