@@ -1,0 +1,224 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1778831023002,
+  "projectRoot": "C:\\Users\\ST-USER\\Desktop\\개발자 양성 교육\\블록체인프로젝트(하이퍼)\\pointpro\\fe\\petchain",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "react",
+        "version": "19.2.6",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.2.6",
+        "category": "frontend"
+      },
+      {
+        "name": "vite",
+        "version": "8.0.12",
+        "category": "build"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": null,
+    "lintCommand": "npm run lint",
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "vite",
+      "build": "vite build",
+      "lint": "eslint .",
+      "preview": "vite preview"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": "type-based"
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "public",
+      "src"
+    ],
+    "gitBranches": {
+      "defaultBranch": "develop",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 2,
+      "lastAccessed": 1778831022945,
+      "keyFiles": [
+        "favicon.svg",
+        "icons.svg"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 5,
+      "lastAccessed": 1778831022946,
+      "keyFiles": [
+        "App.css",
+        "App.jsx",
+        "index.css",
+        "main.jsx",
+        "PetChain.jsx"
+      ]
+    },
+    "src\\assets": {
+      "path": "src\\assets",
+      "purpose": "Static assets",
+      "fileCount": 2,
+      "lastAccessed": 1778831022957,
+      "keyFiles": [
+        "hero.png",
+        "react.svg"
+      ]
+    },
+    "src\\components": {
+      "path": "src\\components",
+      "purpose": "UI components",
+      "fileCount": 0,
+      "lastAccessed": 1778831022957,
+      "keyFiles": []
+    },
+    "src\\pages": {
+      "path": "src\\pages",
+      "purpose": "Page components",
+      "fileCount": 2,
+      "lastAccessed": 1778831022957,
+      "keyFiles": [
+        "AuthPage.jsx",
+        "Landing.jsx"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "package.json",
+      "accessCount": 7,
+      "lastAccessed": 1778834547160,
+      "type": "file"
+    },
+    {
+      "path": "src\\App.jsx",
+      "accessCount": 5,
+      "lastAccessed": 1778833932804,
+      "type": "file"
+    },
+    {
+      "path": "vite.config.js",
+      "accessCount": 4,
+      "lastAccessed": 1778834210549,
+      "type": "file"
+    },
+    {
+      "path": "src\\styles\\global.css",
+      "accessCount": 3,
+      "lastAccessed": 1778833763790,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\common\\Toast.jsx",
+      "accessCount": 3,
+      "lastAccessed": 1778833946062,
+      "type": "file"
+    },
+    {
+      "path": "src\\main.jsx",
+      "accessCount": 2,
+      "lastAccessed": 1778831049914,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\guardian\\GuardianDash.jsx",
+      "accessCount": 2,
+      "lastAccessed": 1778833878816,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\insurance\\InsuranceDash.jsx",
+      "accessCount": 2,
+      "lastAccessed": 1778833957328,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 2,
+      "lastAccessed": 1778833966328,
+      "type": "directory"
+    },
+    {
+      "path": "eslint.config.js",
+      "accessCount": 2,
+      "lastAccessed": 1778833980436,
+      "type": "file"
+    },
+    {
+      "path": "src\\context\\AppContext.jsx",
+      "accessCount": 2,
+      "lastAccessed": 1778833988629,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\Landing.jsx",
+      "accessCount": 1,
+      "lastAccessed": 1778831265135,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\common\\DashNav.jsx",
+      "accessCount": 1,
+      "lastAccessed": 1778831272182,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\hospital\\HospitalDash.jsx",
+      "accessCount": 1,
+      "lastAccessed": 1778832179504,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\platform\\Platform.jsx",
+      "accessCount": 1,
+      "lastAccessed": 1778832462290,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\common\\Overlay.jsx",
+      "accessCount": 1,
+      "lastAccessed": 1778832614727,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\AuthPage.jsx",
+      "accessCount": 1,
+      "lastAccessed": 1778833924069,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

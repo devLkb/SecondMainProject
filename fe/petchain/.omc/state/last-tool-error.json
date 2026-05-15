@@ -1,0 +1,7 @@
+{
+  "tool_name": "PowerShell",
+  "tool_input_preview": "{\"command\":\"cd \\\"C:\\\\Users\\\\ST-USER\\\\Desktop\\\\개발자 양성 교육\\\\블록체인프로젝트(하이퍼)\\\\pointpro\\\\fe\\\\petchain\\\"; npm run build 2>&1\",\"timeout\":60000,\"description\":\"Build via PowerShell subprocess\"}",
+  "error": "Exit code 1\n> petchain@0.0.0 build\n> powershell -Command \"node_modules/.bin/vite.cmd build\"\n\n\u001b[36mvite v8.0.12 \u001b[32mbuilding client environment for production...\u001b[36m\u001b[39m\n\u001b[2K\rtransforming...✓ 26 modules transformed.",
+  "timestamp": "2026-05-15T08:41:58.392Z",
+  "retry_count": 3
+}
