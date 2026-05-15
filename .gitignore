@@ -7,6 +7,7 @@ Thumbs.db
 .vscode/
 *.iml
 .codex/
+.omc/
 
 # --- Logs / runtime ---
 *.log
