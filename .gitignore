@@ -47,6 +47,7 @@ vite.svg
 
 # --- Spring Boot / Gradle ---
 .gradle/
+.gradle-home/
 build/
 **/build/
 out/
@@ -75,4 +76,3 @@ volumes/
 docker-compose.override.yml
 compose.override.yml
 override.yml
-
