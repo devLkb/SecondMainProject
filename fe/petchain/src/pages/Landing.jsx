@@ -22,7 +22,7 @@ export default function Landing({ onGoAuth }) {
     <div style={{ background: '#fff' }}>
       {/* GNB */}
       <nav className="gnb">
-        <div className="gnb-logo">🐾 Pet<span>Chain</span></div>
+        <div className="gnb-logo" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>🐾 Pet<span>Chain</span></div>
         <div className="gnb-links">
           <a>서비스 소개</a>
           <a>병원 파트너</a>
@@ -36,51 +36,52 @@ export default function Landing({ onGoAuth }) {
       </nav>
 
       {/* Hero */}
-      <div className="hero-section">
-        <div>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: 12, fontWeight: 700, color: 'var(--brand)',
-            background: 'var(--brand-l)', padding: '4px 13px', borderRadius: 20, marginBottom: 20,
-          }}>
-            🔗 Hyperledger Fabric 기반 진료기록 검증 인프라
-          </div>
-          <h1 style={{ fontSize: 48, fontWeight: 800, lineHeight: 1.12, letterSpacing: '-.03em', marginBottom: 16 }}>
-            반려동물 보험 청구,<br />
-            <span style={{ color: 'var(--brand)' }}>더 빠르고 안전하게</span>
-          </h1>
-          <p style={{ fontSize: 16, color: '#52525b', lineHeight: 1.85, marginBottom: 32, maxWidth: 460 }}>
-            병원이 기록을 올리면, 보호자가 동의하고, 보험사가 즉시 검증합니다.
-            위·변조와 중복 청구를 자동으로 차단합니다.
-          </p>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-dark btn-lg" onClick={() => onGoAuth('signup')}>무료로 시작하기</button>
-            <button className="btn btn-ghost btn-lg">서비스 소개 보기</button>
-          </div>
+      <div style={{
+        padding: '100px 60px 90px',
+        background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 40%, #fdf4ff 70%, #fff7ed 100%)',
+        textAlign: 'center', position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', top: '-120px', left: '50%', transform: 'translateX(-50%)',
+          width: 600, height: 600, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(99,102,241,.1) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 12, fontWeight: 700, color: 'var(--brand)',
+          background: 'var(--brand-l)', padding: '5px 16px', borderRadius: 20, marginBottom: 24,
+        }}>
+          🔗 Hyperledger Fabric 기반 진료기록 검증 인프라
+        </div>
+        <h1 style={{ fontSize: 54, fontWeight: 800, lineHeight: 1.1, letterSpacing: '-.04em', marginBottom: 20, position: 'relative' }}>
+          반려동물 보험 청구,<br />
+          <span style={{ color: 'var(--brand)' }}>더 빠르고 안전하게</span>
+        </h1>
+        <p style={{ fontSize: 17, color: '#52525b', lineHeight: 1.9, marginBottom: 40, maxWidth: 520, margin: '0 auto 40px' }}>
+          병원이 기록을 올리면, 보호자가 동의하고, 보험사가 즉시 검증합니다.<br />
+          위·변조와 중복 청구를 자동으로 차단합니다.
+        </p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          <button className="btn btn-primary btn-lg" onClick={() => onGoAuth('signup')}>무료로 시작하기 →</button>
+          <button className="btn btn-ghost btn-lg">서비스 소개 보기</button>
         </div>
 
-        {/* Live Card */}
-        <div style={{ background: '#fff', borderRadius: 18, padding: 26, boxShadow: '0 14px 50px rgba(79,70,229,.12)', border: '1px solid var(--brand-l)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '.06em' }}>실시간 청구 현황</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--success)' }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--success)', animation: 'pulse 1.5s infinite', display: 'inline-block' }} />
-              LIVE
-            </div>
-          </div>
+        {/* 핵심 지표 미니 배지 */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginTop: 52, flexWrap: 'wrap' }}>
           {[
-            { icon: '🏥', bg: '#fff7ed', lbl: '진료기록 등록', sub: '행복동물병원 · REC-2024-0041', tag: '완료', tc: 'badge-success' },
-            { icon: '🐾', bg: 'var(--brand-xl)', lbl: '보호자 제출 동의', sub: '초코 · DB손해보험 · 토글 ON', tag: '완료', tc: 'badge-brand' },
-            { icon: '🛡️', bg: '#f0f9ff', lbl: '보험사 검증 API', sub: '해시 일치 · 중복 없음', tag: '검증 중', tc: 'badge-warning' },
-            { icon: '📋', bg: '#f5f5f4', lbl: '심사 결과', sub: '보험사 내부 판단 대기', tag: '대기', tc: 'badge-muted' },
-          ].map((r, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 0', borderBottom: i < 3 ? '1px solid #f4f4f5' : 'none' }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: r.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{r.icon}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{r.lbl}</div>
-                <div style={{ fontSize: 11, color: '#a1a1aa', marginTop: 1 }}>{r.sub}</div>
-              </div>
-              <span className={`badge ${r.tc}`}>{r.tag}</span>
+            { icon: '🏥', text: '병원 · 진료기록 등록' },
+            { icon: '🐾', text: '보호자 · 동의 토글 ON' },
+            { icon: '🛡️', text: '보험사 · 해시 검증 API' },
+            { icon: '✅', text: '즉시 심사 결과' },
+          ].map((b, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: '#fff', border: '1px solid var(--border)',
+              borderRadius: 30, padding: '8px 18px', fontSize: 13, fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(0,0,0,.06)', color: 'var(--text-2)',
+            }}>
+              <span>{b.icon}</span>{b.text}
             </div>
           ))}
         </div>

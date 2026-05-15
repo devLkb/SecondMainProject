@@ -3,6 +3,75 @@ import DashNav from '../../components/common/DashNav'
 import Overlay from '../../components/common/Overlay'
 import { useApp } from '../../context/AppContext'
 
+function ConsentCard({ c, onToggle }) {
+  const isActive  = c.status === 'active'
+  const isPending = c.status === 'pending'
+
+  return (
+    <div
+      className="card"
+      style={{
+        borderLeft: `4px solid ${isActive ? 'var(--success)' : isPending ? 'var(--warning)' : 'var(--border-d)'}`,
+        opacity: isPending ? .75 : 1,
+        background: isActive ? 'var(--success-xl)' : c.status === 'revoked' ? '#fafaf9' : 'var(--surface)',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* 왼쪽 정보 */}
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{c.pet}</span>
+            <span style={{ color: 'var(--muted)' }}>·</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)' }}>{c.disease}</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <span>🏥 {c.hospital}</span>
+            <span className="mono">{c.recordId}</span>
+            <span>💰 {c.cost.toLocaleString()}원</span>
+            <span>🛡️ {c.insurerName}</span>
+          </div>
+        </div>
+
+        {/* 오른쪽 토글 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 20, flexShrink: 0 }}>
+          <span style={{
+            fontSize: 12, fontWeight: 700,
+            color: isActive ? 'var(--success)' : isPending ? 'var(--warning)' : 'var(--muted)',
+          }}>
+            {isActive ? '동의 중' : isPending ? '대기 중' : '동의 안 함'}
+          </span>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={isActive}
+              disabled={isPending}
+              onChange={() => onToggle(c.recordId)}
+            />
+            <span className="toggle-slider" />
+          </label>
+        </div>
+      </div>
+
+      {/* 상태 메시지 */}
+      {isActive && (
+        <div className="consent-active-banner" style={{ marginTop: 12 }}>
+          ✅ <strong>{c.insurerName}</strong>에 서류 자동 전달 중 · 보험사 검증 가능 상태
+        </div>
+      )}
+      {c.status === 'revoked' && (
+        <div className="consent-revoked-banner" style={{ marginTop: 12 }}>
+          ⛔ 동의 철회됨 — <strong>{c.insurerName}</strong> 신규 접근 차단 · 토글 ON으로 재동의 가능
+        </div>
+      )}
+      {isPending && (
+        <div className="alert alert-warning" style={{ marginTop: 12 }}>
+          ⏳ 병원이 진료기록을 아직 등록하지 않았습니다. 등록 후 동의 가능합니다.
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function GuardianDash({ showToast, onLogout }) {
   const { state, toggleConsent } = useApp()
   const [tab, setTab]     = useState('home')
@@ -25,8 +94,6 @@ export default function GuardianDash({ showToast, onLogout }) {
     )
   }
 
-  const statusLabel = (s) => ({ active: '동의 완료', revoked: '철회됨', pending: '대기 중' }[s])
-  const statusBadge = (s) => ({ active: 'badge-success', revoked: 'badge-danger', pending: 'badge-warning' }[s])
 
   return (
     <>
@@ -106,91 +173,51 @@ export default function GuardianDash({ showToast, onLogout }) {
             <div className="pane-h">동의 관리</div>
             <div className="pane-sub">토글을 ON하면 보험사에 서류가 자동으로 전달됩니다</div>
 
-            <div className="alert alert-info" style={{ marginBottom: 24 }}>
+            <div className="alert alert-info" style={{ marginBottom: 28 }}>
               ℹ️ 동의 유효기간은 1년이며, 언제든지 철회 가능합니다. 철회 즉시 보험사의 신규 접근이 차단됩니다.
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {consents.map(c => (
-                <div
-                  key={c.recordId}
-                  className="card"
-                  style={{
-                    borderLeft: `4px solid ${c.status === 'active' ? 'var(--success)' : c.status === 'revoked' ? 'var(--danger)' : 'var(--warning)'}`,
-                    transition: 'all .2s',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{c.pet}</div>
-                        <span style={{ color: 'var(--muted)', fontSize: 14 }}>·</span>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)' }}>{c.disease}</div>
-                        <span className={`badge ${statusBadge(c.status)}`}>{statusLabel(c.status)}</span>
-                      </div>
-                      <div style={{ fontSize: 13, color: 'var(--muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                        <span>🏥 {c.hospital}</span>
-                        <span className="mono">{c.recordId}</span>
-                        <span>💰 {c.cost.toLocaleString()}원</span>
-                        <span>📅 {c.date}</span>
-                      </div>
-                    </div>
-
-                    {/* 토글 */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginLeft: 24, flexShrink: 0 }}>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={c.status === 'active'}
-                          disabled={c.status === 'pending'}
-                          onChange={() => handleToggle(c.recordId)}
-                        />
-                        <span className="toggle-slider" />
-                      </label>
-                      <span style={{
-                        fontSize: 11, fontWeight: 800, letterSpacing: '.04em',
-                        color: c.status === 'active' ? 'var(--success)' : c.status === 'revoked' ? 'var(--danger)' : 'var(--muted)'
-                      }}>
-                        {c.status === 'active' ? 'ON' : c.status === 'revoked' ? 'OFF' : '대기'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 상태 배너 */}
-                  {c.status === 'active' && (
-                    <div className="consent-active-banner">
-                      ✅ 동의 완료 — <strong>{c.insurerName}</strong>에 서류 자동 전달 중
-                    </div>
-                  )}
-                  {c.status === 'revoked' && (
-                    <div className="consent-revoked-banner">
-                      ⛔ 동의 철회됨 — <strong>{c.insurerName}</strong> 신규 접근 차단
-                    </div>
-                  )}
-                  {c.status === 'pending' && (
-                    <div className="alert alert-warning" style={{ marginTop: 14 }}>
-                      ⏳ 병원이 진료기록을 아직 등록하지 않았습니다
-                    </div>
-                  )}
-
-                  <div className="divider" />
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
-                    <div className="row-flex" style={{ padding: '4px 0' }}>
-                      <span style={{ color: 'var(--muted)', fontWeight: 600 }}>제출 대상</span>
-                      <span style={{ fontWeight: 700 }}>{c.insurerName}</span>
-                    </div>
-                    <div className="row-flex" style={{ padding: '4px 0' }}>
-                      <span style={{ color: 'var(--muted)', fontWeight: 600 }}>진료 행위</span>
-                      <span className="mono">{c.treatment}</span>
-                    </div>
-                    <div className="row-flex" style={{ padding: '4px 0', borderBottom: 'none' }}>
-                      <span style={{ color: 'var(--muted)', fontWeight: 600 }}>동의 ID</span>
-                      <span className="mono">{c.consentId}</span>
-                    </div>
-                  </div>
+            {/* ── 동의 완료 섹션 ── */}
+            {consents.filter(c => c.status === 'active').length > 0 && (
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--success)' }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    동의 완료 — {consents.filter(c => c.status === 'active').length}건 전송 중
+                  </span>
                 </div>
-              ))}
-            </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {consents.filter(c => c.status === 'active').map(c => (
+                    <ConsentCard key={c.recordId} c={c} onToggle={handleToggle} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── 미동의 / 철회 섹션 ── */}
+            {consents.filter(c => c.status !== 'active').length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--muted-l)' }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    미동의 / 철회 — {consents.filter(c => c.status !== 'active').length}건
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {consents.filter(c => c.status !== 'active').map(c => (
+                    <ConsentCard key={c.recordId} c={c} onToggle={handleToggle} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 전체 동의 없을 때 */}
+            {consents.length === 0 && (
+              <div className="card" style={{ textAlign: 'center', padding: 56, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+                <div style={{ fontWeight: 700 }}>등록된 진료기록이 없습니다</div>
+              </div>
+            )}
           </div>
         )}
 
