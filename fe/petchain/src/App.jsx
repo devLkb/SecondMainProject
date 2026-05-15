@@ -1,122 +1,73 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { AppProvider } from './context/AppContext'
+import Landing from './pages/Landing'
+import AuthPage from './pages/AuthPage'
+import GuardianDash from './pages/guardian/GuardianDash'
+import HospitalDash from './pages/hospital/HospitalDash'
+import InsuranceDash from './pages/insurance/InsuranceDash'
+import Platform from './pages/platform/Platform'
+import Toast from './components/common/Toast'
+import './styles/global.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+function Inner() {
+  const [page, setPage]   = useState('landing') // 'landing' | 'auth' | 'main'
+  const [authMode, setAuthMode] = useState('login')
+  const [role, setRole]   = useState(null)
+  const [toast, setToast] = useState(null)
+
+  const showToast = (title, msg) => setToast({ title, msg })
+
+  const handleLogin = (selectedRole) => {
+    setRole(selectedRole)
+    setPage('main')
+  }
+
+  const handleLogout = () => {
+    setRole(null)
+    setPage('landing')
+  }
+
+  const goAuth = (mode = 'login') => {
+    setAuthMode(mode)
+    setPage('auth')
+  }
+
+  if (page === 'landing') {
+    return (
+      <>
+        <Landing onGoAuth={goAuth} />
+        {toast && <Toast title={toast.title} msg={toast.msg} onClose={() => setToast(null)} />}
+      </>
+    )
+  }
+
+  if (page === 'auth') {
+    return (
+      <>
+        <AuthPage key={authMode} mode={authMode} onLogin={handleLogin} onBack={() => setPage('landing')} />
+        {toast && <Toast title={toast.title} msg={toast.msg} onClose={() => setToast(null)} />}
+      </>
+    )
+  }
+
+  // main — role-based dashboard
+  const dashProps = { showToast, onLogout: handleLogout }
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+      {role === 'guardian'  && <GuardianDash  {...dashProps} />}
+      {role === 'hospital'  && <HospitalDash  {...dashProps} />}
+      {role === 'insurance' && <InsuranceDash {...dashProps} />}
+      {role === 'platform'  && <Platform      {...dashProps} />}
+      {toast && <Toast title={toast.title} msg={toast.msg} onClose={() => setToast(null)} />}
     </>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <AppProvider>
+      <Inner />
+    </AppProvider>
+  )
+}
