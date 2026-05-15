@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import DashNav from '../../components/common/DashNav'
 import Overlay from '../../components/common/Overlay'
-import { useApp } from '../../context/AppContext'
+import { useApp, generatePetId } from '../../context/AppContext'
 
 function ConsentCard({ c, onToggle }) {
   const isActive  = c.status === 'active'
@@ -72,11 +72,18 @@ function ConsentCard({ c, onToggle }) {
   )
 }
 
+function speciesIcon(species) {
+  if (species === '강아지') return '🐶'
+  if (species === '고양이') return '🐱'
+  if (species === '토끼') return '🐰'
+  return '🐾'
+}
+
 export default function GuardianDash({ showToast, onLogout }) {
-  const { state, toggleConsent } = useApp()
+  const { state, toggleConsent, addPet } = useApp()
   const [tab, setTab]     = useState('home')
   const [modal, setModal] = useState(null)
-  const [newPet, setNewPet] = useState({ name: '', species: 'dog' })
+  const [newPet, setNewPet] = useState({ name: '', species: 'dog', breed: '', birthYear: '', chipNo: '', petId: '' })
 
   const consents    = Object.values(state.consents)
   const activeCount = consents.filter(c => c.status === 'active').length
@@ -94,6 +101,26 @@ export default function GuardianDash({ showToast, onLogout }) {
     )
   }
 
+  const openPetModal = () => {
+    const petId = generatePetId(state.pets.map(p => p.petId))
+    setNewPet({ name: '', species: 'dog', breed: '', birthYear: '', chipNo: '', petId })
+    setModal('pet')
+  }
+
+  const handleAddPet = () => {
+    const speciesMap = { dog: '강아지', cat: '고양이', rabbit: '토끼' }
+    addPet({
+      petId: newPet.petId,
+      name: newPet.name,
+      species: speciesMap[newPet.species] || newPet.species,
+      breed: newPet.breed,
+      birthYear: newPet.birthYear ? Number(newPet.birthYear) : '',
+      chipNo: newPet.chipNo,
+      insurer: 'DB손해보험',
+    })
+    setModal(null)
+    showToast('반려동물 등록', (newPet.name || '새 반려동물') + ' 등록 완료')
+  }
 
   return (
     <>
@@ -111,16 +138,16 @@ export default function GuardianDash({ showToast, onLogout }) {
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-ghost" onClick={() => setModal('ins')}>+ 보험 계약 등록</button>
-                <button className="btn btn-primary" onClick={() => setModal('pet')}>+ 반려동물 추가</button>
+                <button className="btn btn-primary" onClick={openPetModal}>+ 반려동물 추가</button>
               </div>
             </div>
 
             {/* 요약 stat */}
             <div className="g3" style={{ marginBottom: 28 }}>
               {[
-                { n: consents.length, l: '총 진료기록', c: 'var(--brand)', bg: 'var(--brand-xl)' },
-                { n: activeCount,     l: '동의 활성',   c: 'var(--success)', bg: 'var(--success-xl)' },
-                { n: revokedCount,    l: '동의 철회',   c: 'var(--danger)',  bg: 'var(--danger-xl)' },
+                { n: state.medicalRecords.length, l: '총 진료기록', c: 'var(--brand)', bg: 'var(--brand-xl)' },
+                { n: activeCount,                 l: '동의 활성',   c: 'var(--success)', bg: 'var(--success-xl)' },
+                { n: revokedCount,                l: '동의 철회',   c: 'var(--danger)',  bg: 'var(--danger-xl)' },
               ].map((s, i) => (
                 <div key={i} className="stat-box" style={{ background: s.bg, border: `1px solid ${s.c}22` }}>
                   <div className="stat-n" style={{ color: s.c }}>{s.n}</div>
@@ -131,17 +158,18 @@ export default function GuardianDash({ showToast, onLogout }) {
 
             {/* 반려동물 카드 */}
             <div className="g3">
-              {[{ name: '초코', species: '말티즈', age: '3세', insurer: 'DB손해보험', status: 'active' }].map((p, i) => (
+              {state.pets.map((p, i) => (
                 <div key={i} className="card" style={{ borderTop: '3px solid var(--brand)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
                     <div style={{
                       width: 52, height: 52, borderRadius: 14,
                       background: 'linear-gradient(135deg, var(--brand-xl), var(--brand-l))',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26
-                    }}>🐶</div>
+                    }}>{speciesIcon(p.species)}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{p.name}</div>
-                      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{p.species} · {p.age}</div>
+                      <span className="mono" style={{ fontSize: 12, color: 'var(--brand)', fontWeight: 700 }}>{p.petId}</span>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{p.species} · {p.breed}</div>
                     </div>
                     <span className="badge badge-success">보험 활성</span>
                   </div>
@@ -163,6 +191,41 @@ export default function GuardianDash({ showToast, onLogout }) {
                   </button>
                 </div>
               ))}
+            </div>
+
+            {/* 의료기록 */}
+            <div className="card" style={{ marginTop: 28 }}>
+              <div className="card-title">의료기록</div>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>기록 ID</th>
+                    <th>반려동물</th>
+                    <th>PetChain ID</th>
+                    <th>진료일</th>
+                    <th>질병 코드</th>
+                    <th>진료비</th>
+                    <th>체인 기록</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.medicalRecords.map(r => (
+                    <tr key={r.id}>
+                      <td><span className="mono">{r.id}</span></td>
+                      <td style={{ fontWeight: 600 }}>{r.petName}</td>
+                      <td><span className="mono" style={{ fontSize: 12, color: 'var(--brand)' }}>{r.petId}</span></td>
+                      <td>{r.date}</td>
+                      <td style={{ fontSize: 12 }}>{r.diseases.join(', ')}</td>
+                      <td>{r.cost.toLocaleString()}원</td>
+                      <td>
+                        <span className={`badge ${r.onChain ? 'badge-success' : 'badge-warning'}`}>
+                          {r.onChain ? '원장 기록' : '미기록'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -284,6 +347,17 @@ export default function GuardianDash({ showToast, onLogout }) {
       {/* 반려동물 등록 모달 */}
       {modal === 'pet' && (
         <Overlay title="반려동물 등록" sub="정보 입력 후 반려동물이 등록됩니다" onClose={() => setModal(null)}>
+          {/* PetChain ID 표시 */}
+          <label className="fl">PetChain ID (자동 발급)</label>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 800,
+            color: 'var(--brand)', background: 'var(--brand-xl)',
+            border: '1.5px solid var(--brand-l)', borderRadius: 8,
+            padding: '10px 14px', marginBottom: 14, letterSpacing: '.05em',
+          }}>
+            {newPet.petId}
+          </div>
+
           <div className="fi-row">
             <div><label className="fl">이름</label><input className="fi" placeholder="초코" value={newPet.name} onChange={e => setNewPet(p => ({ ...p, name: e.target.value }))} /></div>
             <div><label className="fl">종류</label>
@@ -295,16 +369,16 @@ export default function GuardianDash({ showToast, onLogout }) {
             </div>
           </div>
           <div className="fi-row">
-            <div><label className="fl">품종</label><input className="fi" placeholder="말티즈" /></div>
-            <div><label className="fl">출생연도</label><input className="fi" type="number" placeholder="2021" /></div>
+            <div><label className="fl">품종</label><input className="fi" placeholder="말티즈" value={newPet.breed} onChange={e => setNewPet(p => ({ ...p, breed: e.target.value }))} /></div>
+            <div><label className="fl">출생연도</label><input className="fi" type="number" placeholder="2021" value={newPet.birthYear} onChange={e => setNewPet(p => ({ ...p, birthYear: e.target.value }))} /></div>
           </div>
           <label className="fl">마이크로칩 번호</label>
-          <input className="fi" placeholder="15자리 숫자" />
+          <input className="fi" placeholder="15자리 숫자 — 없으면 공란" value={newPet.chipNo} onChange={e => setNewPet(p => ({ ...p, chipNo: e.target.value }))} />
           <div className="fi-note">📌 마이크로칩 번호는 SHA-256 해시 변환 후 온체인 기록됩니다.</div>
           <button
             className="btn btn-primary"
             style={{ width: '100%', padding: 13, fontSize: 14 }}
-            onClick={() => { setModal(null); showToast('반려동물 등록', (newPet.name || '새 반려동물') + ' 등록 완료') }}
+            onClick={handleAddPet}
           >
             등록 완료
           </button>

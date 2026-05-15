@@ -2,28 +2,76 @@ import { useState } from 'react'
 import DashNav from '../../components/common/DashNav'
 import { useApp } from '../../context/AppContext'
 
+const DISEASE_CODES = [
+  { code: 'KC-001', name: '피부염' },
+  { code: 'KC-042', name: '골절' },
+  { code: 'KC-055', name: '관절염' },
+  { code: 'KC-108', name: '슬개골 탈구' },
+]
+
+const TREATMENT_CODES = [
+  { code: 'VA-032', name: '약물 처방' },
+  { code: 'VA-011', name: 'X-ray 촬영' },
+  { code: 'VA-025', name: '수술' },
+]
+
 export default function HospitalDash({ showToast, onLogout }) {
-  const { state, setState } = useApp()
+  const { state, setState, addMedicalRecord } = useApp()
   const [tab, setTab] = useState('reg')
 
   const consents       = state.consents
   const activeConsents = Object.values(consents).filter(c => c.status === 'active')
 
-  const handleRecord = (recordId) => {
-    const c = consents[recordId]
-    if (!c || c.status !== 'active') {
-      showToast('제출 불가', '보호자 동의가 없습니다. 보호자에게 동의 요청하세요.')
+  // 진료기록 등록 폼 상태
+  const [searchId, setSearchId]         = useState('')
+  const [foundPet, setFoundPet]         = useState(null)
+  const [formDate, setFormDate]         = useState(new Date().toISOString().slice(0, 10))
+  const [formDiseases, setFormDiseases] = useState([])
+  const [formTreatments, setFormTreatments] = useState([])
+  const [formCost, setFormCost]         = useState('')
+  const [formMemo, setFormMemo]         = useState('')
+
+  const toggleDisease = (code) => {
+    setFormDiseases(prev =>
+      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+    )
+  }
+
+  const toggleTreatment = (code) => {
+    setFormTreatments(prev =>
+      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+    )
+  }
+
+  const handleSearch = () => {
+    const pet = state.pets.find(p => p.petId.toUpperCase() === searchId.trim().toUpperCase())
+    if (!pet) {
+      showToast('조회 실패', '등록된 반려동물을 찾을 수 없습니다')
+      setFoundPet(null)
       return
     }
-    setState(s => ({
-      ...s,
-      creditN: s.creditN + 1,
-      txLog: [
-        { time: new Date().toLocaleTimeString(), type: '기록', org: 'hosp-001', desc: `${recordId} — SHA-256 원장 기록` },
-        ...s.txLog,
-      ],
-    }))
-    showToast('원장 기록', `${recordId} — on_chain_status: confirmed · 크레딧 +1`)
+    const records = state.medicalRecords.filter(r => r.petId === pet.petId)
+    setFoundPet({ ...pet, records })
+  }
+
+  const handleSubmitRecord = () => {
+    if (!foundPet || !formCost || formDiseases.length === 0) return
+    addMedicalRecord({
+      petId: foundPet.petId,
+      petName: foundPet.name,
+      date: formDate.replace(/-/g, '.'),
+      diseases: formDiseases.map(code => `${code} · ${DISEASE_CODES.find(d => d.code === code)?.name}`),
+      treatments: formTreatments.map(code => `${code} · ${TREATMENT_CODES.find(t => t.code === code)?.name}`),
+      cost: Number(formCost),
+      memo: formMemo,
+    })
+    showToast('원장 기록', `${foundPet.name} 진료기록 등록 완료 · 크레딧 +1`)
+    setFoundPet(null)
+    setSearchId('')
+    setFormDiseases([])
+    setFormTreatments([])
+    setFormCost('')
+    setFormMemo('')
   }
 
   return (
@@ -47,52 +95,140 @@ export default function HospitalDash({ showToast, onLogout }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
               {/* 왼쪽: 폼 */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+                {/* 환자 조회 */}
                 <div className="card">
-                  <div className="card-title">환자 정보</div>
-                  <div className="fi-row">
-                    <div><label className="fl">보호자명 / 반려동물</label><input className="fi" placeholder="홍길동 / 초코" /></div>
-                    <div><label className="fl">진료일</label><input className="fi" type="date" defaultValue="2024-05-08" /></div>
+                  <div className="card-title">환자 조회</div>
+                  <label className="fl">PetChain ID 조회</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      className="fi"
+                      style={{ flex: 1 }}
+                      placeholder="예: B-20240101"
+                      value={searchId}
+                      onChange={e => setSearchId(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                    />
+                    <button className="btn btn-primary" onClick={handleSearch}>조회</button>
                   </div>
+
+                  {/* 조회된 반려동물 정보 */}
+                  {foundPet && (
+                    <div style={{ marginTop: 14, padding: '14px 16px', background: 'var(--success-xl)', border: '1.5px solid var(--success)', borderRadius: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                        <span style={{ fontSize: 22 }}>🐶</span>
+                        <div>
+                          <span style={{ fontWeight: 800, fontSize: 16 }}>{foundPet.name}</span>
+                          <span className="mono" style={{ marginLeft: 10, fontSize: 12, color: 'var(--brand)' }}>{foundPet.petId}</span>
+                        </div>
+                        <span className="badge badge-success" style={{ marginLeft: 'auto' }}>조회됨</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        <span>{foundPet.species} · {foundPet.breed}</span>
+                        <span>{foundPet.birthYear}년생</span>
+                        <span>보험: {foundPet.insurer}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 이전 진료기록 */}
+                  {foundPet && foundPet.records.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                        이전 진료기록 ({foundPet.records.length}건)
+                      </div>
+                      <table className="tbl">
+                        <thead>
+                          <tr><th>기록 ID</th><th>진료일</th><th>질병</th><th>진료비</th><th>상태</th></tr>
+                        </thead>
+                        <tbody>
+                          {foundPet.records.map(r => (
+                            <tr key={r.id}>
+                              <td><span className="mono">{r.id}</span></td>
+                              <td>{r.date}</td>
+                              <td style={{ fontSize: 12 }}>{r.diseases.join(', ')}</td>
+                              <td>{r.cost.toLocaleString()}원</td>
+                              <td>
+                                <span className={`badge ${r.onChain ? 'badge-success' : 'badge-warning'}`}>
+                                  {r.onChain ? '원장 기록' : '미기록'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 <div className="card">
-                  <div className="card-title">질병 코드 (복수 선택)</div>
+                  <div className="card-title">진료 정보</div>
+                  <div className="fi-row">
+                    <div>
+                      <label className="fl">진료일</label>
+                      <input className="fi" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="card-title" style={{ marginTop: 16 }}>질병 코드 (복수 선택)</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-                    {[['KC-001', '피부염', true], ['KC-042', '골절', false], ['KC-055', '관절염', false], ['KC-108', '슬개골 탈구', false]].map(([c, n, d]) => (
-                      <label key={c} style={{
-                        display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px',
-                        border: '1.5px solid var(--border)', borderRadius: 9, cursor: 'pointer',
-                        fontSize: 13, fontWeight: 600, transition: 'all .15s',
-                        background: d ? 'var(--brand-xl)' : 'var(--surface)',
-                        borderColor: d ? 'var(--brand-l)' : 'var(--border)',
-                      }}>
-                        <input type="checkbox" defaultChecked={d} style={{ accentColor: 'var(--brand)' }} />
-                        <span className="mono" style={{ background: 'none', padding: 0 }}>{c}</span>
-                        <span style={{ color: 'var(--text-2)' }}>{n}</span>
-                      </label>
-                    ))}
+                    {DISEASE_CODES.map(({ code, name }) => {
+                      const checked = formDiseases.includes(code)
+                      return (
+                        <label key={code} style={{
+                          display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px',
+                          border: '1.5px solid var(--border)', borderRadius: 9, cursor: 'pointer',
+                          fontSize: 13, fontWeight: 600, transition: 'all .15s',
+                          background: checked ? 'var(--brand-xl)' : 'var(--surface)',
+                          borderColor: checked ? 'var(--brand-l)' : 'var(--border)',
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleDisease(code)}
+                            style={{ accentColor: 'var(--brand)' }}
+                          />
+                          <span className="mono" style={{ background: 'none', padding: 0 }}>{code}</span>
+                          <span style={{ color: 'var(--text-2)' }}>{name}</span>
+                        </label>
+                      )
+                    })}
                   </div>
 
                   <div className="card-title">진료 행위 코드</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
-                    {[['VA-032', '약물 처방', true], ['VA-011', 'X-ray', false], ['VA-025', '수술', false]].map(([c, n, d]) => (
-                      <label key={c} style={{
-                        display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px',
-                        border: '1.5px solid var(--border)', borderRadius: 9, cursor: 'pointer',
-                        fontSize: 13, fontWeight: 600,
-                        background: d ? 'var(--orange-xl)' : 'var(--surface)',
-                        borderColor: d ? 'var(--orange-l)' : 'var(--border)',
-                      }}>
-                        <input type="checkbox" defaultChecked={d} style={{ accentColor: 'var(--orange)' }} />
-                        <span className="mono" style={{ background: 'none', padding: 0 }}>{c}</span>
-                        <span style={{ color: 'var(--text-2)' }}>{n}</span>
-                      </label>
-                    ))}
+                    {TREATMENT_CODES.map(({ code, name }) => {
+                      const checked = formTreatments.includes(code)
+                      return (
+                        <label key={code} style={{
+                          display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px',
+                          border: '1.5px solid var(--border)', borderRadius: 9, cursor: 'pointer',
+                          fontSize: 13, fontWeight: 600,
+                          background: checked ? 'var(--orange-xl)' : 'var(--surface)',
+                          borderColor: checked ? 'var(--orange-l)' : 'var(--border)',
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleTreatment(code)}
+                            style={{ accentColor: 'var(--orange)' }}
+                          />
+                          <span className="mono" style={{ background: 'none', padding: 0 }}>{code}</span>
+                          <span style={{ color: 'var(--text-2)' }}>{name}</span>
+                        </label>
+                      )
+                    })}
                   </div>
 
                   <div className="fi-row">
-                    <div><label className="fl">총 진료비 (원)</label><input className="fi" type="number" defaultValue={48000} /></div>
-                    <div><label className="fl">진료 소견</label><input className="fi" placeholder="간단한 소견" /></div>
+                    <div>
+                      <label className="fl">총 진료비 (원)</label>
+                      <input className="fi" type="number" placeholder="48000" value={formCost} onChange={e => setFormCost(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="fl">진료 소견</label>
+                      <input className="fi" placeholder="간단한 소견" value={formMemo} onChange={e => setFormMemo(e.target.value)} />
+                    </div>
                   </div>
                 </div>
 
@@ -143,7 +279,7 @@ export default function HospitalDash({ showToast, onLogout }) {
                 <button
                   className="btn btn-orange"
                   style={{ padding: '14px', fontSize: 14, fontWeight: 700 }}
-                  onClick={() => handleRecord('REC-2024-0041')}
+                  onClick={handleSubmitRecord}
                 >
                   🔗 원장에 기록 (on-chain)
                 </button>
