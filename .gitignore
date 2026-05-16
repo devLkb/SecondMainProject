@@ -49,6 +49,7 @@ vite.svg
 # --- Local docs / design files (README.md 제외) ---
 *.md
 !README.md
+!chaincode/petchain/DEPLOY_DEMO.md
 *.html
 
 # --- Spring Boot / Gradle ---

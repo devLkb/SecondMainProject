@@ -59,7 +59,7 @@
 
 보호자가 동의를 철회하면 `RevokeConsent`가 호출되고, 유효기간이 끝나면 `ExpireConsent`가 호출된다.
 
-동의 철회 또는 만료 후에는 백엔드가 신규 제출, 제출 패키지 신규 조회, 검증 API 신규 조회를 차단한다. 체인코드는 해당 동의의 상태 변화 이력을 원장에 보존한다.
+동의 철회 또는 만료 후에는 백엔드가 신규 제출, 제출 패키지 신규 조회, 검증 API 신규 조회를 차단한다. 체인코드는 해당 동의의 상태 변화 이력을 원장에 보존한다. 제출 생성 시 `CreateSubmissionWithConsent`를 사용하면 체인코드도 `ACTIVE` 상태가 아닌 동의의 제출을 거절한다.
 
 ## 3. 병원이 보험사 제출 요청 생성
 
@@ -73,7 +73,30 @@
 - 진료기록 해시가 등록 시점의 해시와 같은가
 - 제출 가능한 상태인가
 
-검증을 통과하면 백엔드는 체인코드의 `CreateSubmission`을 호출한다.
+검증을 통과하면 백엔드는 체인코드의 `CreateSubmissionWithConsent`를 우선 호출한다.
+
+```text
+CreateSubmissionWithConsent(
+  submissionId,
+  recordId,
+  consentId,
+  hospitalId,
+  insurerId,
+  recordHashAtSubmit,
+  createdAt
+)
+```
+
+이 함수는 체인코드에서 다음 조건을 다시 확인한다.
+
+- 진료기록이 존재하는가
+- 진료기록의 병원 ID가 제출 병원과 같은가
+- 제출 시점 해시가 원장에 저장된 현재 진료기록 해시와 같은가
+- 동의가 존재하는가
+- 동의 상태가 `ACTIVE`인가
+- 동의의 진료기록, 병원, 보험사가 제출 요청과 같은가
+
+기존 `CreateSubmission`은 백엔드가 사전 검증을 끝낸 제출 요청을 기록하는 호환용 함수로 유지한다. 실제 MVP 흐름에서는 `CreateSubmissionWithConsent`를 사용해 MVP 제출 정책을 체인코드 레벨에서도 보장한다.
 
 원장에는 제출 요청이 `PENDING` 상태로 저장된다.
 
@@ -81,7 +104,7 @@
 record -> consent -> submission
 ```
 
-이 단계에서 체인코드는 제출 요청과 진료기록, 병원, 보험사의 연결 관계를 고정한다.
+이 단계에서 체인코드는 제출 요청과 진료기록, 동의, 병원, 보험사의 연결 관계를 고정한다.
 
 ## 4. 플랫폼이 제출 요청을 검증
 
@@ -180,6 +203,12 @@ RecordVerification(PASSED)
 
 `mvp.md`의 "동일 제출 요청 반복 성공 호출도 매번 차감/적립" 조건을 만족하려면, 백엔드는 실제 새로운 검증 API 성공 호출마다 새로운 `idempotencyKey`를 사용해야 한다. 네트워크 재시도나 중복 요청 방지 목적의 재시도에만 같은 `idempotencyKey`를 사용해야 한다.
 
+정리하면 과금 기준은 다음과 같다.
+
+- 같은 제출 건 + 같은 `idempotencyKey` + 5분 이내 재시도: 중복 요청으로 보고 추가 차감/적립 없음
+- 같은 제출 건 + 새로운 `idempotencyKey` + 검증 API 성공: 새로운 성공 호출로 보고 포인트 1점 차감, 크레딧 1점 적립
+- 포인트 부족, 권한 없음, 검증 실패, `BLOCKED` 상태: 과금/크레딧 적립 없음
+
 ## 7. 병원이 크레딧 사용
 
 병원 화면에서 고급 SaaS 기능을 사용하거나 자체 웹사이트 배너 홍보를 요청하면, 백엔드는 병원 크레딧 잔액을 확인하고 체인코드를 호출한다.
@@ -246,7 +275,8 @@ RecordVerification(PASSED)
 
 병원 제출 요청
 -> 백엔드가 동의/보험사/해시 검증
--> CreateSubmission
+-> CreateSubmissionWithConsent
+-> 체인코드가 ACTIVE 동의/보험사/병원/해시를 재검증
 
 플랫폼 검증
 -> RecordVerification
