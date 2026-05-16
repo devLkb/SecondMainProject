@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"type \\\"C:\\\\Users\\\\ST-USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-ST-USER\\\\bc9fda47-81fd-4562-b7d8-aad2ecef41d4\\\\tasks\\\\bw9ki2m59.output\\\"\",\"description\":\"Check dev server output\"}",
-  "error": "Exit code 1\n/usr/bin/bash: line 1: type: C:\\Users\\ST-USER\\AppData\\Local\\Temp\\claude\\C--Users-ST-USER\\bc9fda47-81fd-4562-b7d8-aad2ecef41d4\\tasks\\bw9ki2m59.output: not found",
-  "timestamp": "2026-05-16T06:37:10.298Z",
+  "tool_input_preview": "{\"command\":\"type \\\"C:\\\\Users\\\\ST-USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-ST-USER\\\\bc9fda47-81fd-4562-b7d8-aad2ecef41d4\\\\tasks\\\\bammdwkqu.output\\\"\",\"description\":\"Check dev server output\"}",
+  "error": "Exit code 1\n/usr/bin/bash: line 1: type: C:\\Users\\ST-USER\\AppData\\Local\\Temp\\claude\\C--Users-ST-USER\\bc9fda47-81fd-4562-b7d8-aad2ecef41d4\\tasks\\bammdwkqu.output: not found",
+  "timestamp": "2026-05-16T07:24:11.509Z",
   "retry_count": 1
 }
