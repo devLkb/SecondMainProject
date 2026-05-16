@@ -61,7 +61,7 @@ public class SubmissionController {
             @Valid @RequestBody VerificationDtos.VerificationRequest verificationRequest,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKeyHeader,
             HttpServletRequest request) {
-        requireMatchingSubmissionId(submissionId, verificationRequest.submissionId());
+        validateMatchingSubmissionId(submissionId, verificationRequest.submissionId());
         return ApiResponse.of(verificationApiPort.verifySubmission(actor, submissionId, verificationRequest, idempotencyKeyHeader), request);
     }
 
@@ -74,7 +74,7 @@ public class SubmissionController {
         return ApiResponse.of(submissionApiPort.updateClaimStatus(actor, submissionId, claimStatusRequest), request);
     }
 
-    private static void requireMatchingSubmissionId(String pathSubmissionId, String bodySubmissionId) {
+    private static void validateMatchingSubmissionId(String pathSubmissionId, String bodySubmissionId) {
         if (!pathSubmissionId.equals(bodySubmissionId)) {
             throw ApiException.validation("Path submissionId must match request submissionId",
                     Map.of("pathSubmissionId", pathSubmissionId, "bodySubmissionId", bodySubmissionId));

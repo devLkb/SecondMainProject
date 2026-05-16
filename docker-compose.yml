@@ -5,17 +5,17 @@ services:
     image: mysql:8.0
     container_name: petchain-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: '1234'
-      MYSQL_DATABASE: petchain
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-1234}
+      MYSQL_DATABASE: ${DB_NAME:-petchain}
       TZ: Asia/Seoul
     ports:
-      - "3306:3306"
+      - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p1234"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p${DB_PASSWORD:-1234}"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -27,11 +27,17 @@ services:
       dockerfile: Dockerfile
     container_name: petchain-backend
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/petchain?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: '1234'
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-petchain}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-1234}
+      JWT_SECRET: ${JWT_SECRET:-petchain-jwt-secret-key-must-be-at-least-256-bits-long-for-hs256-algo}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-3600000}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-604800000}
+      SERVER_PORT: ${SERVER_PORT:-8080}
     depends_on:
       mysql:
         condition: service_healthy

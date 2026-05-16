@@ -5,13 +5,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
-
 // member_type='user' 인 회원의 프로필 테이블 (보호자)
 @Entity
 @Table(name = "guardians")
 @Getter @Setter @NoArgsConstructor
-public class Guardian {
+public class Guardian extends TimestampedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -39,21 +37,4 @@ public class Guardian {
 
     @Column(name = "identity_verified", nullable = false, length = 20)
     private String identityVerified = "none";
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
 }

@@ -56,7 +56,10 @@ public class ConsentController {
             @PathVariable String consentId,
             @RequestBody(required = false) ConsentDtos.RevokeConsentRequest revokeConsentRequest,
             HttpServletRequest request) {
-        ConsentDtos.RevokeConsentRequest safeRequest = revokeConsentRequest == null ? new ConsentDtos.RevokeConsentRequest(null) : revokeConsentRequest;
-        return ApiResponse.of(consentApiPort.revokeConsent(actor, consentId, safeRequest), request);
+        return ApiResponse.of(consentApiPort.revokeConsent(actor, consentId, safeRevokeRequest(revokeConsentRequest)), request);
+    }
+
+    private static ConsentDtos.RevokeConsentRequest safeRevokeRequest(ConsentDtos.RevokeConsentRequest request) {
+        return request == null ? new ConsentDtos.RevokeConsentRequest(null) : request;
     }
 }

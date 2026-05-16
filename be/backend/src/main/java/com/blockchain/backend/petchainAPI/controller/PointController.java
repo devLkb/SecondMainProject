@@ -42,7 +42,7 @@ public class PointController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) int size,
             HttpServletRequest request) {
-        PointDtos.TransactionSearchRequest search = new PointDtos.TransactionSearchRequest(insurerId, null, type, from, to, page, size);
+        PointDtos.TransactionSearchRequest search = searchRequest(insurerId, null, type, from, to, page, size);
         return ApiResponse.of(pointApiPort.getInsurerPointTransactions(actor, insurerId, search), request);
     }
 
@@ -57,7 +57,7 @@ public class PointController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) int size,
             HttpServletRequest request) {
-        PointDtos.TransactionSearchRequest search = new PointDtos.TransactionSearchRequest(insurerId, hospitalId, type, from, to, page, size);
+        PointDtos.TransactionSearchRequest search = searchRequest(insurerId, hospitalId, type, from, to, page, size);
         return ApiResponse.of(pointApiPort.getPointTransactions(actor, search), request);
     }
 
@@ -72,7 +72,7 @@ public class PointController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) int size,
             HttpServletRequest request) {
-        PointDtos.TransactionSearchRequest search = new PointDtos.TransactionSearchRequest(insurerId, hospitalId, type, from, to, page, size);
+        PointDtos.TransactionSearchRequest search = searchRequest(insurerId, hospitalId, type, from, to, page, size);
         return ApiResponse.of(pointApiPort.getCreditTransactions(actor, search), request);
     }
 
@@ -83,5 +83,15 @@ public class PointController {
             @Valid @RequestBody PointDtos.SpendSaasCreditsRequest spendSaasCreditsRequest,
             HttpServletRequest request) {
         return ApiResponse.of(pointApiPort.spendSaasCredits(actor, hospitalId, spendSaasCreditsRequest), request);
+    }
+
+    private static PointDtos.TransactionSearchRequest searchRequest(String insurerId,
+                                                                    String hospitalId,
+                                                                    String type,
+                                                                    String from,
+                                                                    String to,
+                                                                    int page,
+                                                                    int size) {
+        return new PointDtos.TransactionSearchRequest(insurerId, hospitalId, type, from, to, page, size);
     }
 }

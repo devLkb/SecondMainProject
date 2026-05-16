@@ -1,6 +1,6 @@
 package com.blockchain.backend.petchainDB.entity;
 
-import com.blockchain.backend.petchainLOGIN.util.MemberNumberGenerator;
+import com.blockchain.backend.common.IdentifierGenerator;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -60,7 +60,7 @@ public class Pet {
     @PrePersist
     protected void onCreate() {
         if (petNumber == null) {
-            petNumber = MemberNumberGenerator.generatePetNumber();
+            petNumber = IdentifierGenerator.generatePetNumber();
         }
         registeredAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();

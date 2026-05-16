@@ -1,11 +1,14 @@
-package com.blockchain.backend.petchainLOGIN.util;
+package com.blockchain.backend.common;
 
 import java.security.SecureRandom;
 import java.time.Year;
 
-public class MemberNumberGenerator {
+public final class IdentifierGenerator {
 
     private static final SecureRandom RANDOM = new SecureRandom();
+
+    private IdentifierGenerator() {
+    }
 
     public static String generateUserNumber() {
         return "U-" + digits(8);

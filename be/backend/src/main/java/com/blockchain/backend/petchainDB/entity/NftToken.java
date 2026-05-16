@@ -1,6 +1,6 @@
 package com.blockchain.backend.petchainDB.entity;
 
-import com.blockchain.backend.petchainLOGIN.util.MemberNumberGenerator;
+import com.blockchain.backend.common.IdentifierGenerator;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -45,7 +45,7 @@ public class NftToken {
     @PrePersist
     protected void onCreate() {
         if (tokenId == null) {
-            tokenId = MemberNumberGenerator.generateNftTokenId();
+            tokenId = IdentifierGenerator.generateNftTokenId();
         }
         issuedAt = LocalDateTime.now();
     }

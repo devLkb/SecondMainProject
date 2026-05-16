@@ -20,15 +20,41 @@ public class PetResponse {
     private final String message;
 
     public PetResponse(Pet pet, String message) {
-        this.petId       = pet.getId();
-        this.petNumber   = pet.getPetNumber();
-        this.name        = pet.getName();
-        this.species     = pet.getSpecies();
-        this.breed       = pet.getBreed();
-        this.birthYear   = pet.getBirthYear();
-        this.gender      = pet.getGender();
-        this.isNeutered  = pet.getIsNeutered();
-        this.registeredAt = pet.getRegisteredAt();
+        this(pet.getId(),
+                pet.getPetNumber(),
+                pet.getName(),
+                pet.getSpecies(),
+                pet.getBreed(),
+                pet.getBirthYear(),
+                pet.getGender(),
+                pet.getIsNeutered(),
+                pet.getRegisteredAt(),
+                message);
+    }
+
+    public PetResponse(Long petId,
+                       String petNumber,
+                       String name,
+                       String species,
+                       String breed,
+                       Integer birthYear,
+                       String gender,
+                       Boolean isNeutered,
+                       LocalDateTime registeredAt,
+                       String message) {
+        this.petId       = petId;
+        this.petNumber   = petNumber;
+        this.name        = name;
+        this.species     = species;
+        this.breed       = breed;
+        this.birthYear   = birthYear;
+        this.gender      = gender;
+        this.isNeutered  = isNeutered;
+        this.registeredAt = registeredAt;
         this.message     = message;
+    }
+
+    public static PetResponse from(Pet pet, String message) {
+        return new PetResponse(pet, message);
     }
 }

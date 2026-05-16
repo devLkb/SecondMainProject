@@ -37,7 +37,7 @@ public class RecordController {
             @RequestPart("recordFile") MultipartFile recordFile,
             @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments,
             HttpServletRequest request) {
-        RecordDtos.CreateRecordResponse response = recordApiPort.createRecord(actor, metadata, recordFile, attachments == null ? List.of() : attachments);
+        RecordDtos.CreateRecordResponse response = recordApiPort.createRecord(actor, metadata, recordFile, safeAttachments(attachments));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(response, request));
     }
 
@@ -59,5 +59,9 @@ public class RecordController {
             @PathVariable String recordId,
             HttpServletRequest request) {
         return ApiResponse.of(recordApiPort.getRecord(actor, recordId), request);
+    }
+
+    private static List<MultipartFile> safeAttachments(List<MultipartFile> attachments) {
+        return attachments == null ? List.of() : attachments;
     }
 }

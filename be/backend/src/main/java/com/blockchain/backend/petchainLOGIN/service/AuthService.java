@@ -1,22 +1,43 @@
 package com.blockchain.backend.petchainLOGIN.service;
 
-import com.blockchain.backend.petchainLOGIN.dto.request.*;
-import com.blockchain.backend.petchainLOGIN.dto.response.AuthResponse;
-import com.blockchain.backend.petchainDB.entity.*;
-import com.blockchain.backend.petchainDB.repository.*;
+import com.blockchain.backend.common.DomainValues.AccountStatus;
+import com.blockchain.backend.common.DomainValues.MemberType;
+import com.blockchain.backend.common.DomainValues.PointOwnerType;
+import com.blockchain.backend.common.IdentifierGenerator;
+import com.blockchain.backend.petchainDB.entity.Guardian;
+import com.blockchain.backend.petchainDB.entity.Hospital;
+import com.blockchain.backend.petchainDB.entity.InsuranceCompany;
 import com.blockchain.backend.petchainDB.entity.PointBalance;
+import com.blockchain.backend.petchainDB.entity.RefreshToken;
+import com.blockchain.backend.petchainDB.entity.User;
+import com.blockchain.backend.petchainDB.repository.GuardianRepository;
+import com.blockchain.backend.petchainDB.repository.HospitalRepository;
+import com.blockchain.backend.petchainDB.repository.InsuranceCompanyRepository;
+import com.blockchain.backend.petchainDB.repository.PointBalanceRepository;
+import com.blockchain.backend.petchainDB.repository.RefreshTokenRepository;
+import com.blockchain.backend.petchainDB.repository.UserRepository;
+import com.blockchain.backend.petchainLOGIN.dto.request.HospitalRegisterRequest;
+import com.blockchain.backend.petchainLOGIN.dto.request.InsuranceRegisterRequest;
+import com.blockchain.backend.petchainLOGIN.dto.request.LoginRequest;
+import com.blockchain.backend.petchainLOGIN.dto.request.UserRegisterRequest;
+import com.blockchain.backend.petchainLOGIN.dto.response.AuthResponse;
 import com.blockchain.backend.petchainLOGIN.util.JwtUtil;
-import com.blockchain.backend.petchainLOGIN.util.MemberNumberGenerator;
+import java.time.LocalDateTime;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+    private static final String DUPLICATE_ORG_ID = "이미 등록된 Org ID입니다.";
+    private static final String DUPLICATE_FABRIC_ORG_ID = "이미 등록된 Fabric Org ID입니다.";
+    private static final String DUPLICATE_BUSINESS_NUMBER = "이미 등록된 사업자등록번호입니다.";
+    private static final String PENDING_APPROVAL_MESSAGE = "등록 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.";
+    private static final String MEMBER_NUMBER_FAILURE = "회원번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 
     private final UserRepository userRepository;
     private final GuardianRepository guardianRepository;
@@ -30,18 +51,10 @@ public class AuthService {
     // 보호자(user) 회원가입
     @Transactional
     public AuthResponse registerUser(UserRegisterRequest req) {
-        if (userRepository.existsByLoginId(req.getEmail())) {
-            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
-        }
-
-        User user = new User();
-        user.setLoginId(req.getEmail());
-        user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
-        user.setMemberType("user");
-        user.setStatus("active");
-        userRepository.save(user);
+        requireUnusedLoginId(req.getEmail(), "이미 사용 중인 이메일입니다.");
 
         String memberNumber = uniqueUserNumber();
+        User user = createUser(req.getEmail(), req.getPassword(), MemberType.USER, AccountStatus.ACTIVE);
 
         Guardian guardian = new Guardian();
         guardian.setUser(user);
@@ -58,24 +71,12 @@ public class AuthService {
     // 병원 등록 신청 (관리자 승인 대기)
     @Transactional
     public AuthResponse registerHospital(HospitalRegisterRequest req) {
-        if (userRepository.existsByLoginId(req.getFabricOrgId())) {
-            throw new IllegalArgumentException("이미 등록된 Org ID입니다.");
-        }
-        if (hospitalRepository.existsByFabricOrgId(req.getFabricOrgId())) {
-            throw new IllegalArgumentException("이미 등록된 Fabric Org ID입니다.");
-        }
-        if (hospitalRepository.existsByBusinessNumber(req.getBusinessNumber())) {
-            throw new IllegalArgumentException("이미 등록된 사업자등록번호입니다.");
-        }
-
-        User user = new User();
-        user.setLoginId(req.getFabricOrgId());
-        user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
-        user.setMemberType("hospital");
-        user.setStatus("suspended");  // 관리자 승인 후 active 전환
-        userRepository.save(user);
+        requireUnusedLoginId(req.getFabricOrgId(), DUPLICATE_ORG_ID);
+        requireFalse(hospitalRepository.existsByFabricOrgId(req.getFabricOrgId()), DUPLICATE_FABRIC_ORG_ID);
+        requireFalse(hospitalRepository.existsByBusinessNumber(req.getBusinessNumber()), DUPLICATE_BUSINESS_NUMBER);
 
         String memberNumber = uniqueHospitalNumber();
+        User user = createUser(req.getFabricOrgId(), req.getPassword(), MemberType.HOSPITAL, AccountStatus.SUSPENDED);
 
         Hospital hospital = new Hospital();
         hospital.setUser(user);
@@ -89,41 +90,19 @@ public class AuthService {
         hospital.setIsActive(false);
         hospitalRepository.save(hospital);
 
-        PointBalance pointBalance = new PointBalance();
-        pointBalance.setOwnerType("hospital");
-        pointBalance.setOwnerId(hospital.getId());
-        pointBalance.setBalance(0);
-        pointBalanceRepository.save(pointBalance);
-
-        return AuthResponse.builder()
-                .userId(user.getId())
-                .memberNumber(memberNumber)
-                .memberType("hospital")
-                .message("등록 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.")
-                .build();
+        createPointBalance(PointOwnerType.HOSPITAL, hospital.getId());
+        return pendingApprovalResponse(user, memberNumber);
     }
 
     // 보험사 등록 신청 (관리자 승인 대기)
     @Transactional
     public AuthResponse registerInsurance(InsuranceRegisterRequest req) {
-        if (userRepository.existsByLoginId(req.getFabricOrgId())) {
-            throw new IllegalArgumentException("이미 등록된 Org ID입니다.");
-        }
-        if (insuranceCompanyRepository.existsByFabricOrgId(req.getFabricOrgId())) {
-            throw new IllegalArgumentException("이미 등록된 Fabric Org ID입니다.");
-        }
-        if (insuranceCompanyRepository.existsByBusinessNumber(req.getBusinessNumber())) {
-            throw new IllegalArgumentException("이미 등록된 사업자등록번호입니다.");
-        }
-
-        User user = new User();
-        user.setLoginId(req.getFabricOrgId());
-        user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
-        user.setMemberType("insurance");
-        user.setStatus("suspended");
-        userRepository.save(user);
+        requireUnusedLoginId(req.getFabricOrgId(), DUPLICATE_ORG_ID);
+        requireFalse(insuranceCompanyRepository.existsByFabricOrgId(req.getFabricOrgId()), DUPLICATE_FABRIC_ORG_ID);
+        requireFalse(insuranceCompanyRepository.existsByBusinessNumber(req.getBusinessNumber()), DUPLICATE_BUSINESS_NUMBER);
 
         String memberNumber = uniqueInsuranceNumber();
+        User user = createUser(req.getFabricOrgId(), req.getPassword(), MemberType.INSURANCE, AccountStatus.SUSPENDED);
 
         InsuranceCompany company = new InsuranceCompany();
         company.setUser(user);
@@ -134,17 +113,34 @@ public class AuthService {
         company.setAdminEmail(req.getAdminEmail());
         insuranceCompanyRepository.save(company);
 
+        createPointBalance(PointOwnerType.INSURANCE, company.getId());
+        return pendingApprovalResponse(user, memberNumber);
+    }
+
+    private User createUser(String loginId, String password, String memberType, String status) {
+        User user = new User();
+        user.setLoginId(loginId);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setMemberType(memberType);
+        user.setStatus(status);
+        userRepository.save(user);
+        return user;
+    }
+
+    private void createPointBalance(String ownerType, Long ownerId) {
         PointBalance pointBalance = new PointBalance();
-        pointBalance.setOwnerType("insurance");
-        pointBalance.setOwnerId(company.getId());
+        pointBalance.setOwnerType(ownerType);
+        pointBalance.setOwnerId(ownerId);
         pointBalance.setBalance(0);
         pointBalanceRepository.save(pointBalance);
+    }
 
+    private static AuthResponse pendingApprovalResponse(User user, String memberNumber) {
         return AuthResponse.builder()
                 .userId(user.getId())
                 .memberNumber(memberNumber)
-                .memberType("insurance")
-                .message("등록 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.")
+                .memberType(user.getMemberType())
+                .message(PENDING_APPROVAL_MESSAGE)
                 .build();
     }
 
@@ -158,10 +154,10 @@ public class AuthService {
             throw new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        if ("suspended".equals(user.getStatus())) {
+        if (AccountStatus.SUSPENDED.equals(user.getStatus())) {
             throw new IllegalStateException("관리자 승인 대기 중인 계정입니다.");
         }
-        if ("withdrawn".equals(user.getStatus())) {
+        if (AccountStatus.WITHDRAWN.equals(user.getStatus())) {
             throw new IllegalStateException("탈퇴한 계정입니다.");
         }
 
@@ -196,26 +192,34 @@ public class AuthService {
     }
 
     private String uniqueUserNumber() {
-        for (int i = 0; i < 10; i++) {
-            String num = MemberNumberGenerator.generateUserNumber();
-            if (!guardianRepository.existsByMemberNumber(num)) return num;
-        }
-        throw new IllegalStateException("회원번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        return uniqueNumber(IdentifierGenerator::generateUserNumber, guardianRepository::existsByMemberNumber);
     }
 
     private String uniqueHospitalNumber() {
-        for (int i = 0; i < 10; i++) {
-            String num = MemberNumberGenerator.generateHospitalNumber();
-            if (!hospitalRepository.existsByMemberNumber(num)) return num;
-        }
-        throw new IllegalStateException("회원번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        return uniqueNumber(IdentifierGenerator::generateHospitalNumber, hospitalRepository::existsByMemberNumber);
     }
 
     private String uniqueInsuranceNumber() {
+        return uniqueNumber(IdentifierGenerator::generateInsuranceNumber, insuranceCompanyRepository::existsByMemberNumber);
+    }
+
+    private static String uniqueNumber(Supplier<String> generator, Predicate<String> exists) {
         for (int i = 0; i < 10; i++) {
-            String num = MemberNumberGenerator.generateInsuranceNumber();
-            if (!insuranceCompanyRepository.existsByMemberNumber(num)) return num;
+            String number = generator.get();
+            if (!exists.test(number)) {
+                return number;
+            }
         }
-        throw new IllegalStateException("회원번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        throw new IllegalStateException(MEMBER_NUMBER_FAILURE);
+    }
+
+    private void requireUnusedLoginId(String loginId, String message) {
+        requireFalse(userRepository.existsByLoginId(loginId), message);
+    }
+
+    private static void requireFalse(boolean condition, String message) {
+        if (condition) {
+            throw new IllegalArgumentException(message);
+        }
     }
 }

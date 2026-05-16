@@ -24,9 +24,10 @@ public class InternalVerificationController {
             @PathVariable String submissionId,
             @RequestBody(required = false) VerificationDtos.InternalVerifyRequest internalVerifyRequest,
             HttpServletRequest request) {
-        VerificationDtos.InternalVerifyRequest safeRequest = internalVerifyRequest == null
-                ? new VerificationDtos.InternalVerifyRequest(null, null, false)
-                : internalVerifyRequest;
-        return ApiResponse.of(internalVerificationApiPort.verifySubmission(actor, submissionId, safeRequest), request);
+        return ApiResponse.of(internalVerificationApiPort.verifySubmission(actor, submissionId, safeVerifyRequest(internalVerifyRequest)), request);
+    }
+
+    private static VerificationDtos.InternalVerifyRequest safeVerifyRequest(VerificationDtos.InternalVerifyRequest request) {
+        return request == null ? new VerificationDtos.InternalVerifyRequest(null, null, false) : request;
     }
 }

@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@RestControllerAdvice
+@RestControllerAdvice(basePackages = "com.blockchain.backend.petchainLOGIN")
 public class GlobalExceptionHandler {
 
     // @Valid 유효성 검사 실패

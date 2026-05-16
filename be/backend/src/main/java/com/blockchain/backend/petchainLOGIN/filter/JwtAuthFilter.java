@@ -1,5 +1,6 @@
 package com.blockchain.backend.petchainLOGIN.filter;
 
+import com.blockchain.backend.common.DomainValues.MemberType;
 import com.blockchain.backend.petchainAPI.security.ActorType;
 import com.blockchain.backend.petchainLOGIN.util.JwtUtil;
 import io.jsonwebtoken.Claims;
@@ -44,6 +45,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 );
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (Exception ignored) {
+                SecurityContextHolder.clearContext();
             }
         }
         chain.doFilter(request, response);
@@ -52,11 +54,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private ActorType toActorType(String memberType) {
         if (memberType == null) return ActorType.UNKNOWN;
         return switch (memberType) {
-            case "user"      -> ActorType.GUARDIAN;
-            case "hospital"  -> ActorType.HOSPITAL;
-            case "insurance" -> ActorType.INSURER;
-            case "platform"  -> ActorType.ADMIN;
-            default          -> ActorType.UNKNOWN;
+            case MemberType.USER -> ActorType.GUARDIAN;
+            case MemberType.HOSPITAL -> ActorType.HOSPITAL;
+            case MemberType.INSURANCE -> ActorType.INSURER;
+            case MemberType.PLATFORM -> ActorType.ADMIN;
+            default -> ActorType.UNKNOWN;
         };
     }
 }

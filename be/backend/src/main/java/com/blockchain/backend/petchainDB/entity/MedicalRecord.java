@@ -1,18 +1,17 @@
 package com.blockchain.backend.petchainDB.entity;
 
-import com.blockchain.backend.petchainLOGIN.util.MemberNumberGenerator;
+import com.blockchain.backend.common.IdentifierGenerator;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "medical_records")
 @Getter @Setter @NoArgsConstructor
-public class MedicalRecord {
+public class MedicalRecord extends TimestampedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -53,23 +52,10 @@ public class MedicalRecord {
     @Column(name = "on_chain_status", nullable = false, length = 20)
     private String onChainStatus = "pending"; // pending | confirmed | failed
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     @PrePersist
-    protected void onCreate() {
+    protected void assignRecordId() {
         if (recordId == null) {
-            recordId = MemberNumberGenerator.generateRecordId();
+            recordId = IdentifierGenerator.generateRecordId();
         }
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
     }
 }

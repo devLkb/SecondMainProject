@@ -1,6 +1,6 @@
 package com.blockchain.backend.petchainDB.entity;
 
-import com.blockchain.backend.petchainLOGIN.util.MemberNumberGenerator;
+import com.blockchain.backend.common.IdentifierGenerator;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Table(name = "claim_packages",
         uniqueConstraints = @UniqueConstraint(columnNames = {"medical_record_id", "insurance_company_id"}))
 @Getter @Setter @NoArgsConstructor
-public class ClaimPackage {
+public class ClaimPackage extends TimestampedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -64,23 +64,10 @@ public class ClaimPackage {
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     @PrePersist
-    protected void onCreate() {
+    protected void assignClaimId() {
         if (claimId == null) {
-            claimId = MemberNumberGenerator.generateClaimId();
+            claimId = IdentifierGenerator.generateClaimId();
         }
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
     }
 }

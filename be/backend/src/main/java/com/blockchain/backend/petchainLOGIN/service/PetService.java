@@ -1,11 +1,12 @@
 package com.blockchain.backend.petchainLOGIN.service;
 
+import com.blockchain.backend.common.IdentifierGenerator;
 import com.blockchain.backend.petchainDB.entity.Guardian;
 import com.blockchain.backend.petchainDB.entity.Pet;
 import com.blockchain.backend.petchainDB.repository.GuardianRepository;
 import com.blockchain.backend.petchainDB.repository.PetRepository;
 import com.blockchain.backend.petchainLOGIN.dto.request.PetRegisterRequest;
-import com.blockchain.backend.petchainLOGIN.util.MemberNumberGenerator;
+import com.blockchain.backend.petchainLOGIN.dto.response.PetResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +19,7 @@ public class PetService {
     private final GuardianRepository guardianRepository;
 
     @Transactional
-    public Pet registerPet(Long userId, PetRegisterRequest req) {
+    public PetResponse registerPet(Long userId, PetRegisterRequest req) {
         Guardian guardian = guardianRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new IllegalArgumentException("보호자 정보를 찾을 수 없습니다."));
 
@@ -34,12 +35,13 @@ public class PetService {
         pet.setGender(req.getGender());
         pet.setIsNeutered(req.getIsNeutered());
 
-        return petRepository.save(pet);
+        Pet savedPet = petRepository.save(pet);
+        return PetResponse.from(savedPet, "동물 등록이 완료되었습니다.");
     }
 
     private String uniquePetNumber() {
         for (int i = 0; i < 10; i++) {
-            String num = MemberNumberGenerator.generatePetNumber();
+            String num = IdentifierGenerator.generatePetNumber();
             if (!petRepository.existsByPetNumber(num)) return num;
         }
         throw new IllegalStateException("동물번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
