@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainDB.entity;
+package com.blockchain.backend.petchainDB.entity;
 
 import com.blockchain.backend.petchainLOGIN.util.MemberNumberGenerator;
 import jakarta.persistence.*;

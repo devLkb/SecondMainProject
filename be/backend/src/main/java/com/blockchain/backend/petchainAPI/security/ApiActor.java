@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.security;
+package com.blockchain.backend.petchainAPI.security;
 
 public record ApiActor(
         String actorId,

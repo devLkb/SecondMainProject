@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.dto.point;
+package com.blockchain.backend.petchainAPI.dto.point;
 
 import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;

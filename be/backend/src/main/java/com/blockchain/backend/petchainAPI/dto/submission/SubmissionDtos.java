@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.dto.submission;
+package com.blockchain.backend.petchainAPI.dto.submission;
 
 import com.blockchain.backend.petchainAPI.dto.common.ClaimReviewStatus;
 import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;

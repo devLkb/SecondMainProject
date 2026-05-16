@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainDB.config;
+package com.blockchain.backend.petchainDB.config;
 
 import com.blockchain.backend.petchainDB.entity.DiseaseCode;
 import com.blockchain.backend.petchainDB.entity.TreatmentCode;

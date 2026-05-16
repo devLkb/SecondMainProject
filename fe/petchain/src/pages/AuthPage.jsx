@@ -3,12 +3,44 @@ import { useState } from 'react'
 export default function AuthPage({ mode, onLogin, onBack }) {
   const [role, setRole] = useState('guardian')
   const [tab, setTab]   = useState(mode === 'signup' ? 'signup' : 'login')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // 로그인 폼
+  const [loginId, setLoginId] = useState('')
+  const [loginPw, setLoginPw] = useState('')
+
+  // 보호자 가입
+  const [gName, setGName]           = useState('')
+  const [gPhone, setGPhone]         = useState('')
+  const [gEmail, setGEmail]         = useState('')
+  const [gPw, setGPw]               = useState('')
+  const [gPwConfirm, setGPwConfirm] = useState('')
+
+  // 병원 가입
+  const [hName, setHName]   = useState('')
+  const [hBiz, setHBiz]     = useState('')
+  const [hPhone, setHPhone] = useState('')
+  const [hOrg, setHOrg]     = useState('')
+  const [hEmail, setHEmail] = useState('')
+  const [hPw, setHPw]       = useState('')
+
+  // 보험사 가입
+  const [iName, setIName]   = useState('')
+  const [iBiz, setIBiz]     = useState('')
+  const [iOrg, setIOrg]     = useState('')
+  const [iEmail, setIEmail] = useState('')
+  const [iPw, setIPw]       = useState('')
+
+  // 플랫폼 로그인
+  const [platId, setPlatId] = useState('')
+  const [platPw, setPlatPw] = useState('')
 
   const roles = [
-    { id: 'guardian',  icon: '🐾', name: '보호자',    desc: '반려동물 보험 청구' },
-    { id: 'hospital',  icon: '🏥', name: '병원',      desc: '진료기록 관리' },
-    { id: 'insurance', icon: '🛡️', name: '보험사',    desc: '검증 API 호출' },
-    { id: 'platform',  icon: '⚙️', name: '플랫폼',    desc: '관리자 콘솔' },
+    { id: 'guardian',  icon: '🐾', name: '보호자',  desc: '반려동물 보험 청구' },
+    { id: 'hospital',  icon: '🏥', name: '병원',    desc: '진료기록 관리' },
+    { id: 'insurance', icon: '🛡️', name: '보험사',  desc: '검증 API 호출' },
+    { id: 'platform',  icon: '⚙️', name: '플랫폼',  desc: '관리자 콘솔' },
   ]
 
   const btnClass = {
@@ -22,6 +54,100 @@ export default function AuthPage({ mode, onLogin, onBack }) {
     guardian:  '반려동물 보험 청구를 위한 계정',
     hospital:  '동물병원 진료기록 등록 계정',
     insurance: '검증 API 호출 및 심사 계정',
+  }
+
+  async function api(path, body) {
+    const res = await fetch(`/api${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || '요청에 실패했습니다.')
+    return data
+  }
+
+  async function handleLogin() {
+    setError('')
+    setLoading(true)
+    try {
+      const data = await api('/auth/login', { loginId, password: loginPw })
+      localStorage.setItem('accessToken', data.accessToken)
+      localStorage.setItem('refreshToken', data.refreshToken)
+      localStorage.setItem('memberType', data.memberType)
+      onLogin(data.memberType)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handlePlatformLogin() {
+    setError('')
+    setLoading(true)
+    try {
+      const data = await api('/auth/login', { loginId: platId, password: platPw })
+      localStorage.setItem('accessToken', data.accessToken)
+      localStorage.setItem('refreshToken', data.refreshToken)
+      localStorage.setItem('memberType', data.memberType)
+      onLogin('platform')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleGuardianSignup() {
+    setError('')
+    if (gPw !== gPwConfirm) { setError('비밀번호가 일치하지 않습니다.'); return }
+    setLoading(true)
+    try {
+      const data = await api('/auth/register/user', {
+        name: gName, phone: gPhone, email: gEmail, password: gPw,
+      })
+      localStorage.setItem('accessToken', data.accessToken)
+      localStorage.setItem('refreshToken', data.refreshToken)
+      localStorage.setItem('memberType', data.memberType)
+      onLogin('guardian')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleHospitalSignup() {
+    setError('')
+    setLoading(true)
+    try {
+      await api('/auth/register/hospital', {
+        name: hName, businessNumber: hBiz, phone: hPhone,
+        fabricOrgId: hOrg, adminEmail: hEmail, password: hPw,
+      })
+      setError('등록 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleInsuranceSignup() {
+    setError('')
+    setLoading(true)
+    try {
+      await api('/auth/register/insurance', {
+        name: iName, businessNumber: iBiz, fabricOrgId: iOrg,
+        adminEmail: iEmail, password: iPw,
+      })
+      setError('등록 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -43,7 +169,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
             <div
               key={r.id}
               className={`role-pill ${role === r.id ? 'sel' : ''}`}
-              onClick={() => setRole(r.id)}
+              onClick={() => { setRole(r.id); setError('') }}
             >
               <div style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{r.icon}</div>
               <div>
@@ -67,20 +193,32 @@ export default function AuthPage({ mode, onLogin, onBack }) {
         </button>
 
         <div style={{ width: '100%', maxWidth: 400 }}>
+          {error && (
+            <div style={{
+              marginBottom: 14, padding: '10px 13px', borderRadius: 8,
+              background: error.startsWith('등록 신청') ? '#f0fdf4' : '#fee2e2',
+              color: error.startsWith('등록 신청') ? '#166534' : '#dc2626',
+              fontSize: 13,
+            }}>
+              {error}
+            </div>
+          )}
+
           {role === 'platform' ? (
             <>
               <div style={{ fontSize: 26, fontWeight: 800, marginBottom: 4 }}>플랫폼 관리자</div>
               <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 28 }}>PetChain 운영자 전용 계정</div>
               <label className="fl">관리자 ID</label>
-              <input className="fi" placeholder="platform-admin" />
+              <input className="fi" placeholder="platform-admin" value={platId} onChange={e => setPlatId(e.target.value)} />
               <label className="fl">비밀번호</label>
-              <input className="fi" type="password" placeholder="••••••••" />
+              <input className="fi" type="password" placeholder="••••••••" value={platPw} onChange={e => setPlatPw(e.target.value)} />
               <button
-                className={`btn btn-dark`}
+                className="btn btn-dark"
                 style={{ width: '100%', justifyContent: 'center', padding: 13 }}
-                onClick={() => onLogin('platform')}
+                onClick={handlePlatformLogin}
+                disabled={loading}
               >
-                로그인
+                {loading ? '처리 중...' : '로그인'}
               </button>
             </>
           ) : (
@@ -95,7 +233,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
                 {['login', 'signup'].map(t => (
                   <button
                     key={t}
-                    onClick={() => setTab(t)}
+                    onClick={() => { setTab(t); setError('') }}
                     style={{
                       padding: '9px 20px', background: 'none', border: 'none',
                       borderBottom: `2px solid ${tab === t ? 'var(--brand)' : 'transparent'}`,
@@ -111,15 +249,16 @@ export default function AuthPage({ mode, onLogin, onBack }) {
               {tab === 'login' && (
                 <>
                   <label className="fl">{role === 'guardian' ? '이메일' : '기관 Org ID'}</label>
-                  <input className="fi" placeholder={role === 'guardian' ? 'hong@email.com' : 'org-id'} />
+                  <input className="fi" placeholder={role === 'guardian' ? 'hong@email.com' : 'org-id'} value={loginId} onChange={e => setLoginId(e.target.value)} />
                   <label className="fl">비밀번호</label>
-                  <input className="fi" type="password" placeholder="••••••••" />
+                  <input className="fi" type="password" placeholder="••••••••" value={loginPw} onChange={e => setLoginPw(e.target.value)} />
                   <button
                     className={`btn ${btnClass[role]}`}
                     style={{ width: '100%', justifyContent: 'center', padding: 13 }}
-                    onClick={() => onLogin(role)}
+                    onClick={handleLogin}
+                    disabled={loading}
                   >
-                    로그인
+                    {loading ? '처리 중...' : '로그인'}
                   </button>
                 </>
               )}
@@ -127,18 +266,35 @@ export default function AuthPage({ mode, onLogin, onBack }) {
               {tab === 'signup' && role === 'guardian' && (
                 <>
                   <div className="fi-row">
-                    <div><label className="fl">이름</label><input className="fi" placeholder="홍길동" /></div>
-                    <div><label className="fl">전화번호</label><input className="fi" placeholder="010-0000-0000" /></div>
+                    <div>
+                      <label className="fl">이름</label>
+                      <input className="fi" placeholder="홍길동" value={gName} onChange={e => setGName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="fl">전화번호</label>
+                      <input className="fi" placeholder="010-0000-0000" value={gPhone} onChange={e => setGPhone(e.target.value)} />
+                    </div>
                   </div>
                   <label className="fl">이메일</label>
-                  <input className="fi" type="email" placeholder="hong@email.com" />
+                  <input className="fi" type="email" placeholder="hong@email.com" value={gEmail} onChange={e => setGEmail(e.target.value)} />
                   <div className="fi-row">
-                    <div><label className="fl">비밀번호</label><input className="fi" type="password" placeholder="8자 이상" /></div>
-                    <div><label className="fl">비밀번호 확인</label><input className="fi" type="password" placeholder="재입력" /></div>
+                    <div>
+                      <label className="fl">비밀번호</label>
+                      <input className="fi" type="password" placeholder="8자 이상" value={gPw} onChange={e => setGPw(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="fl">비밀번호 확인</label>
+                      <input className="fi" type="password" placeholder="재입력" value={gPwConfirm} onChange={e => setGPwConfirm(e.target.value)} />
+                    </div>
                   </div>
                   <div className="fi-note">📌 개인정보는 AES-256 암호화 저장됩니다.</div>
-                  <button className={`btn ${btnClass[role]}`} style={{ width: '100%', justifyContent: 'center', padding: 13 }} onClick={() => onLogin(role)}>
-                    보호자로 가입하기
+                  <button
+                    className={`btn ${btnClass[role]}`}
+                    style={{ width: '100%', justifyContent: 'center', padding: 13 }}
+                    onClick={handleGuardianSignup}
+                    disabled={loading}
+                  >
+                    {loading ? '처리 중...' : '보호자로 가입하기'}
                   </button>
                 </>
               )}
@@ -146,18 +302,37 @@ export default function AuthPage({ mode, onLogin, onBack }) {
               {tab === 'signup' && role === 'hospital' && (
                 <>
                   <div className="fi-row">
-                    <div><label className="fl">병원명</label><input className="fi" placeholder="행복동물병원" /></div>
-                    <div><label className="fl">사업자등록번호</label><input className="fi" placeholder="000-00-00000" /></div>
+                    <div>
+                      <label className="fl">병원명</label>
+                      <input className="fi" placeholder="행복동물병원" value={hName} onChange={e => setHName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="fl">사업자등록번호</label>
+                      <input className="fi" placeholder="000-00-00000" value={hBiz} onChange={e => setHBiz(e.target.value)} />
+                    </div>
                   </div>
                   <div className="fi-row">
-                    <div><label className="fl">대표 전화</label><input className="fi" placeholder="02-0000-0000" /></div>
-                    <div><label className="fl">Fabric Org ID</label><input className="fi" placeholder="HospitalA" /></div>
+                    <div>
+                      <label className="fl">대표 전화</label>
+                      <input className="fi" placeholder="02-0000-0000" value={hPhone} onChange={e => setHPhone(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="fl">Fabric Org ID</label>
+                      <input className="fi" placeholder="HospitalA" value={hOrg} onChange={e => setHOrg(e.target.value)} />
+                    </div>
                   </div>
                   <label className="fl">관리자 이메일</label>
-                  <input className="fi" type="email" placeholder="admin@hospital.com" />
+                  <input className="fi" type="email" placeholder="admin@hospital.com" value={hEmail} onChange={e => setHEmail(e.target.value)} />
+                  <label className="fl">비밀번호</label>
+                  <input className="fi" type="password" placeholder="8자 이상" value={hPw} onChange={e => setHPw(e.target.value)} />
                   <div className="a-notice">📋 등록 신청 후 플랫폼 관리자 승인이 필요합니다.</div>
-                  <button className={`btn ${btnClass[role]}`} style={{ width: '100%', justifyContent: 'center', padding: 13 }} onClick={() => onLogin(role)}>
-                    병원 등록 신청
+                  <button
+                    className={`btn ${btnClass[role]}`}
+                    style={{ width: '100%', justifyContent: 'center', padding: 13 }}
+                    onClick={handleHospitalSignup}
+                    disabled={loading}
+                  >
+                    {loading ? '처리 중...' : '병원 등록 신청'}
                   </button>
                 </>
               )}
@@ -165,16 +340,29 @@ export default function AuthPage({ mode, onLogin, onBack }) {
               {tab === 'signup' && role === 'insurance' && (
                 <>
                   <div className="fi-row">
-                    <div><label className="fl">보험사명</label><input className="fi" placeholder="DB손해보험" /></div>
-                    <div><label className="fl">사업자등록번호</label><input className="fi" placeholder="000-00-00000" /></div>
+                    <div>
+                      <label className="fl">보험사명</label>
+                      <input className="fi" placeholder="DB손해보험" value={iName} onChange={e => setIName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="fl">사업자등록번호</label>
+                      <input className="fi" placeholder="000-00-00000" value={iBiz} onChange={e => setIBiz(e.target.value)} />
+                    </div>
                   </div>
                   <label className="fl">Fabric Org ID</label>
-                  <input className="fi" placeholder="InsuranceA" />
+                  <input className="fi" placeholder="InsuranceA" value={iOrg} onChange={e => setIOrg(e.target.value)} />
                   <label className="fl">관리자 이메일</label>
-                  <input className="fi" type="email" placeholder="admin@insurance.com" />
+                  <input className="fi" type="email" placeholder="admin@insurance.com" value={iEmail} onChange={e => setIEmail(e.target.value)} />
+                  <label className="fl">비밀번호</label>
+                  <input className="fi" type="password" placeholder="8자 이상" value={iPw} onChange={e => setIPw(e.target.value)} />
                   <div className="a-notice">📋 등록 신청 후 플랫폼 관리자 승인이 필요합니다.</div>
-                  <button className={`btn ${btnClass[role]}`} style={{ width: '100%', justifyContent: 'center', padding: 13 }} onClick={() => onLogin(role)}>
-                    보험사 등록 신청
+                  <button
+                    className={`btn ${btnClass[role]}`}
+                    style={{ width: '100%', justifyContent: 'center', padding: 13 }}
+                    onClick={handleInsuranceSignup}
+                    disabled={loading}
+                  >
+                    {loading ? '처리 중...' : '보험사 등록 신청'}
                   </button>
                 </>
               )}

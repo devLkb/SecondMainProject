@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.dto.verification;
+package com.blockchain.backend.petchainAPI.dto.verification;
 
 import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;
 import com.blockchain.backend.petchainAPI.dto.common.VerificationDataAccessStatus;
