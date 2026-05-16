@@ -37,6 +37,59 @@ func (c *PetChainContract) CreateSubmission(ctx contractapi.TransactionContextIn
 	return toJson(submission)
 }
 
+func (c *PetChainContract) CreateSubmissionWithConsent(ctx contractapi.TransactionContextInterface, submissionId, recordId, consentId, hospitalId, insurerId, recordHashAtSubmit, createdAt string) (string, error) {
+	if err := c.requireOrg(ctx, platformMSP, hospitalMSP); err != nil {
+		return "", err
+	}
+	if err := requireNonEmpty(map[string]string{"submissionId": submissionId, "recordId": recordId, "consentId": consentId, "hospitalId": hospitalId, "insurerId": insurerId, "recordHashAtSubmit": recordHashAtSubmit, "createdAt": createdAt}); err != nil {
+		return "", err
+	}
+	if err := assertHash(recordHashAtSubmit, "recordHashAtSubmit"); err != nil {
+		return "", err
+	}
+	if err := assertIsoDate(createdAt, "createdAt"); err != nil {
+		return "", err
+	}
+	record, err := c.getRequiredByParts(ctx, "record", "record", recordId)
+	if err != nil {
+		return "", err
+	}
+	if record["hospitalId"] != hospitalId {
+		return "", fmt.Errorf("record %s does not belong to hospital %s", recordId, hospitalId)
+	}
+	if record["currentHash"] != recordHashAtSubmit {
+		return "", fmt.Errorf("record %s hash does not match submitted hash", recordId)
+	}
+	consent, err := c.getRequiredByParts(ctx, "consent", "consent", consentId)
+	if err != nil {
+		return "", err
+	}
+	if consent["status"] != "ACTIVE" {
+		return "", fmt.Errorf("consent %s is not ACTIVE", consentId)
+	}
+	if consent["recordId"] != recordId {
+		return "", fmt.Errorf("consent %s does not belong to record %s", consentId, recordId)
+	}
+	if consent["hospitalId"] != hospitalId {
+		return "", fmt.Errorf("consent %s does not belong to hospital %s", consentId, hospitalId)
+	}
+	if consent["insurerId"] != insurerId {
+		return "", fmt.Errorf("consent %s does not allow insurer %s", consentId, insurerId)
+	}
+	key, _ := c.key(ctx, "submission", submissionId)
+	if err := c.assertMissing(ctx, key, "submission"); err != nil {
+		return "", err
+	}
+	submission := doc{"docType": "submission", "submissionId": submissionId, "recordId": recordId, "consentId": consentId, "hospitalId": hospitalId, "insurerId": insurerId, "recordHashAtSubmit": recordHashAtSubmit, "status": "PENDING", "createdAt": createdAt, "updatedAt": createdAt}
+	if err := c.put(ctx, key, submission); err != nil {
+		return "", err
+	}
+	if err := c.emit(ctx, "SubmissionCreated", doc{"submissionId": submissionId, "recordId": recordId, "consentId": consentId, "hospitalId": hospitalId, "insurerId": insurerId, "recordHashAtSubmit": recordHashAtSubmit, "createdAt": createdAt}); err != nil {
+		return "", err
+	}
+	return toJson(submission)
+}
+
 func (c *PetChainContract) RecordVerification(ctx contractapi.TransactionContextInterface, verificationId, submissionId, status, failureReasonsJson, recordHashAtVerify, consentSnapshotHash, verifiedAt, auditLogId string) (string, error) {
 	if err := c.requireOrg(ctx, platformMSP); err != nil {
 		return "", err
