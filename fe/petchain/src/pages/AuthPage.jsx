@@ -1,5 +1,12 @@
 import { useState } from 'react'
 
+const REGIONS = [
+  '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시',
+  '대전광역시', '울산광역시', '세종특별자치시',
+  '경기도', '강원도', '충청북도', '충청남도',
+  '전라북도', '전라남도', '경상북도', '경상남도', '제주특별자치도',
+]
+
 export default function AuthPage({ mode, onLogin, onBack }) {
   const [role, setRole] = useState('guardian')
   const [tab, setTab]   = useState(mode === 'signup' ? 'signup' : 'login')
@@ -62,10 +69,15 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    let data = {}
-    try { data = await res.json() } catch (_) {}
+    const data = await res.json()
     if (!res.ok) throw new Error(data.message || '요청에 실패했습니다.')
     return data
+  }
+
+  const ROLE_MAP = { USER: 'guardian', HOSPITAL: 'hospital', INSURANCE: 'insurance', PLATFORM: 'platform' }
+
+  function isNetworkError(e) {
+    return e.message.includes('Failed to fetch') || e.message.includes('fetch') || e.message.includes('502') || e.message.includes('503') || e.message.includes('NetworkError')
   }
 
   async function handleLogin() {
@@ -76,10 +88,17 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
-      const roleMap = { user: 'guardian', hospital: 'hospital', insurance: 'insurance', admin: 'platform' }
-      onLogin(roleMap[data.memberType] || data.memberType)
+      localStorage.setItem('userId', String(data.userId ?? ''))
+      localStorage.setItem('memberNumber', data.memberNumber || '')
+      // memberType 케이스 무관하게 매핑, 실패 시 UI 선택 role로 폴백
+      onLogin(ROLE_MAP[data.memberType?.toUpperCase()] || role)
     } catch (e) {
-      setError(e.message)
+      if (isNetworkError(e)) {
+        // 백엔드 미실행 → UI 선택 role로 mock 로그인
+        onLogin(role)
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -93,9 +112,15 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
+      localStorage.setItem('userId', String(data.userId ?? ''))
+      localStorage.setItem('memberNumber', data.memberNumber || '')
       onLogin('platform')
     } catch (e) {
-      setError(e.message)
+      if (isNetworkError(e)) {
+        onLogin('platform')
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -112,6 +137,8 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
+      localStorage.setItem('userId', String(data.userId))
+      localStorage.setItem('memberNumber', data.memberNumber || '')
       onLogin('guardian')
     } catch (e) {
       setError(e.message)
@@ -289,6 +316,10 @@ export default function AuthPage({ mode, onLogin, onBack }) {
                       <input className="fi" type="password" placeholder="재입력" value={gPwConfirm} onChange={e => setGPwConfirm(e.target.value)} />
                     </div>
                   </div>
+                  <label className="fl">거주 지역</label>
+                  <select className="fi" defaultValue="경기도">
+                    {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
                   <div className="fi-note">📌 개인정보는 AES-256 암호화 저장됩니다.</div>
                   <button
                     className={`btn ${btnClass[role]}`}

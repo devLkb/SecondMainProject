@@ -9,10 +9,19 @@ import Platform from './pages/platform/Platform'
 import Toast from './components/common/Toast'
 import './styles/global.css'
 
+const ROLE_MAP = { USER: 'guardian', HOSPITAL: 'hospital', INSURANCE: 'insurance', PLATFORM: 'platform' }
+
+function restoreRole() {
+  const token = localStorage.getItem('accessToken')
+  const mt    = localStorage.getItem('memberType')
+  if (!token || !mt) return null
+  return ROLE_MAP[mt.toUpperCase()] || null
+}
+
 function Inner() {
-  const [page, setPage]   = useState('landing') // 'landing' | 'auth' | 'main'
+  const [page, setPage]   = useState(() => restoreRole() ? 'main' : 'landing')
   const [authMode, setAuthMode] = useState('login')
-  const [role, setRole]   = useState(null)
+  const [role, setRole]   = useState(restoreRole)
   const [toast, setToast] = useState(null)
 
   const showToast = (title, msg) => setToast({ title, msg })
@@ -23,6 +32,11 @@ function Inner() {
   }
 
   const handleLogout = () => {
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('refreshToken')
+    localStorage.removeItem('memberType')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('memberNumber')
     setRole(null)
     setPage('landing')
   }

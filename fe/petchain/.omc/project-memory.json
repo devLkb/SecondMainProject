@@ -34,7 +34,7 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "npm run build",
+    "buildCommand": "cd \"C:\\Users\\ST-USER\\Desktop\\개발자 양성 교육\\블록체인프로젝트(하이퍼)\\pointpro\\fe\\petchain\" && npm run build 2>&1 | tail -8",
     "testCommand": null,
     "lintCommand": "npm run lint",
     "devCommand": "npm run dev",
@@ -118,21 +118,33 @@
   },
   "hotPaths": [
     {
+      "path": "src\\pages\\guardian\\GuardianDash.jsx",
+      "accessCount": 17,
+      "lastAccessed": 1778918611158,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\Landing.jsx",
+      "accessCount": 16,
+      "lastAccessed": 1778915120271,
+      "type": "file"
+    },
+    {
       "path": "package.json",
       "accessCount": 15,
       "lastAccessed": 1778841405777,
       "type": "file"
     },
     {
-      "path": "src\\pages\\guardian\\GuardianDash.jsx",
-      "accessCount": 11,
-      "lastAccessed": 1778844011443,
+      "path": "src\\App.jsx",
+      "accessCount": 8,
+      "lastAccessed": 1778918788904,
       "type": "file"
     },
     {
-      "path": "src\\App.jsx",
-      "accessCount": 6,
-      "lastAccessed": 1778841193485,
+      "path": "src\\context\\AppContext.jsx",
+      "accessCount": 7,
+      "lastAccessed": 1778914741403,
       "type": "file"
     },
     {
@@ -142,21 +154,9 @@
       "type": "file"
     },
     {
-      "path": "src\\context\\AppContext.jsx",
-      "accessCount": 5,
-      "lastAccessed": 1778843808049,
-      "type": "file"
-    },
-    {
       "path": "src\\pages\\hospital\\HospitalDash.jsx",
       "accessCount": 5,
       "lastAccessed": 1778844012088,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\Landing.jsx",
-      "accessCount": 4,
-      "lastAccessed": 1778840525318,
       "type": "file"
     },
     {
@@ -172,22 +172,34 @@
       "type": "file"
     },
     {
-      "path": "src\\main.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1778831049914,
+      "path": "",
+      "accessCount": 3,
+      "lastAccessed": 1778918700562,
+      "type": "directory"
+    },
+    {
+      "path": "src\\pages\\platform\\Platform.jsx",
+      "accessCount": 3,
+      "lastAccessed": 1778918708752,
       "type": "file"
     },
     {
       "path": "src\\pages\\insurance\\InsuranceDash.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1778833957328,
+      "accessCount": 3,
+      "lastAccessed": 1778918709294,
       "type": "file"
     },
     {
-      "path": "",
+      "path": "src\\pages\\AuthPage.jsx",
+      "accessCount": 3,
+      "lastAccessed": 1778918804418,
+      "type": "file"
+    },
+    {
+      "path": "src\\main.jsx",
       "accessCount": 2,
-      "lastAccessed": 1778833966328,
-      "type": "directory"
+      "lastAccessed": 1778831049914,
+      "type": "file"
     },
     {
       "path": "eslint.config.js",
@@ -202,21 +214,9 @@
       "type": "file"
     },
     {
-      "path": "src\\pages\\platform\\Platform.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1778840690199,
-      "type": "file"
-    },
-    {
       "path": "src\\components\\common\\Overlay.jsx",
       "accessCount": 1,
       "lastAccessed": 1778832614727,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\AuthPage.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1778833924069,
       "type": "file"
     }
   ],
