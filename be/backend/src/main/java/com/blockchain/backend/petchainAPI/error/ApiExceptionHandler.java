@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.error;
+package com.blockchain.backend.petchainAPI.error;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;

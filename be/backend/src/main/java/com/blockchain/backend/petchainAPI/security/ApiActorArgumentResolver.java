@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.security;
+package com.blockchain.backend.petchainAPI.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.MethodParameter;
@@ -24,12 +24,18 @@ public class ApiActorArgumentResolver implements HandlerMethodArgumentResolver {
         if (request == null) {
             return ApiActor.anonymous();
         }
-        return new ApiActor(
-                blankToNull(request.getHeader("X-Actor-Id")),
-                blankToNull(request.getHeader("X-Actor-Org-Id")),
-                blankToNull(request.getHeader("X-Actor-Role")),
-                parseActorType(request.getHeader("X-Actor-Type"))
-        );
+        // JWT 필터가 세팅한 request attribute 우선, 없으면 헤더 fallback
+        String actorId   = attrOrHeader(request, "actorId",   "X-Actor-Id");
+        String actorOrgId = blankToNull(request.getHeader("X-Actor-Org-Id"));
+        String actorRole = attrOrHeader(request, "actorRole",  "X-Actor-Role");
+        String actorType = attrOrHeader(request, "actorType",  "X-Actor-Type");
+        return new ApiActor(actorId, actorOrgId, actorRole, parseActorType(actorType));
+    }
+
+    private static String attrOrHeader(HttpServletRequest request, String attr, String header) {
+        Object val = request.getAttribute(attr);
+        if (val instanceof String s && !s.isBlank()) return s;
+        return blankToNull(request.getHeader(header));
     }
 
     private static String blankToNull(String value) {

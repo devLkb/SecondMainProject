@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.dto.common;
+package com.blockchain.backend.petchainAPI.dto.common;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

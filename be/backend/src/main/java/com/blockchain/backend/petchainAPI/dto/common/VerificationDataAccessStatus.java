@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.dto.common;
+package com.blockchain.backend.petchainAPI.dto.common;
 
 public enum VerificationDataAccessStatus {
     AVAILABLE,

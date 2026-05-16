@@ -1,4 +1,4 @@
-﻿package com.blockchain.backend.petchainAPI.dto.consent;
+package com.blockchain.backend.petchainAPI.dto.consent;
 
 import com.blockchain.backend.petchainAPI.dto.common.ConsentStatus;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;

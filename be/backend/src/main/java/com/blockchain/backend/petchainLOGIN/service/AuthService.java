@@ -1,9 +1,10 @@
-﻿package com.blockchain.backend.petchainLOGIN.service;
+package com.blockchain.backend.petchainLOGIN.service;
 
 import com.blockchain.backend.petchainLOGIN.dto.request.*;
 import com.blockchain.backend.petchainLOGIN.dto.response.AuthResponse;
 import com.blockchain.backend.petchainDB.entity.*;
 import com.blockchain.backend.petchainDB.repository.*;
+import com.blockchain.backend.petchainDB.entity.PointBalance;
 import com.blockchain.backend.petchainLOGIN.util.JwtUtil;
 import com.blockchain.backend.petchainLOGIN.util.MemberNumberGenerator;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class AuthService {
     private final HospitalRepository hospitalRepository;
     private final InsuranceCompanyRepository insuranceCompanyRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final PointBalanceRepository pointBalanceRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
@@ -87,6 +89,12 @@ public class AuthService {
         hospital.setIsActive(false);
         hospitalRepository.save(hospital);
 
+        PointBalance pointBalance = new PointBalance();
+        pointBalance.setOwnerType("hospital");
+        pointBalance.setOwnerId(hospital.getId());
+        pointBalance.setBalance(0);
+        pointBalanceRepository.save(pointBalance);
+
         return AuthResponse.builder()
                 .userId(user.getId())
                 .memberNumber(memberNumber)
@@ -126,6 +134,12 @@ public class AuthService {
         company.setAdminEmail(req.getAdminEmail());
         insuranceCompanyRepository.save(company);
 
+        PointBalance pointBalance = new PointBalance();
+        pointBalance.setOwnerType("insurance");
+        pointBalance.setOwnerId(company.getId());
+        pointBalance.setBalance(0);
+        pointBalanceRepository.save(pointBalance);
+
         return AuthResponse.builder()
                 .userId(user.getId())
                 .memberNumber(memberNumber)
@@ -154,7 +168,9 @@ public class AuthService {
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
-        // 로그인 시 memberNumber는 각 프로필 테이블에서 가져와야 하나, 토큰 발급만 담당하는 흐름이므로 null 허용
+        // 이전 refresh token 전부 revoke — 동일 계정 중복 세션 방지
+        refreshTokenRepository.revokeAllByUserId(user.getId());
+
         return issueTokens(user, null, "로그인이 완료되었습니다.");
     }
 
