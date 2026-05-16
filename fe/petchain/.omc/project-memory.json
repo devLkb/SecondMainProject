@@ -34,7 +34,7 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "npm run build",
+    "buildCommand": "cd \"C:\\Users\\ST-USER\\Desktop\\개발자 양성 교육\\블록체인프로젝트(하이퍼)\\pointpro\\fe\\petchain\" && npm run build 2>&1 | tail -8",
     "testCommand": null,
     "lintCommand": "npm run lint",
     "devCommand": "npm run dev",
@@ -118,21 +118,45 @@
   },
   "hotPaths": [
     {
+      "path": "src\\pages\\Landing.jsx",
+      "accessCount": 16,
+      "lastAccessed": 1778915120271,
+      "type": "file"
+    },
+    {
       "path": "package.json",
+      "accessCount": 15,
+      "lastAccessed": 1778841405777,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\guardian\\GuardianDash.jsx",
+      "accessCount": 15,
+      "lastAccessed": 1778914835126,
+      "type": "file"
+    },
+    {
+      "path": "src\\context\\AppContext.jsx",
       "accessCount": 7,
-      "lastAccessed": 1778834547160,
+      "lastAccessed": 1778914741403,
       "type": "file"
     },
     {
       "path": "src\\App.jsx",
-      "accessCount": 5,
-      "lastAccessed": 1778833932804,
+      "accessCount": 6,
+      "lastAccessed": 1778841193485,
       "type": "file"
     },
     {
       "path": "vite.config.js",
-      "accessCount": 4,
-      "lastAccessed": 1778834210549,
+      "accessCount": 5,
+      "lastAccessed": 1778840906701,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\hospital\\HospitalDash.jsx",
+      "accessCount": 5,
+      "lastAccessed": 1778844012088,
       "type": "file"
     },
     {
@@ -154,12 +178,6 @@
       "type": "file"
     },
     {
-      "path": "src\\pages\\guardian\\GuardianDash.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1778833878816,
-      "type": "file"
-    },
-    {
       "path": "src\\pages\\insurance\\InsuranceDash.jsx",
       "accessCount": 2,
       "lastAccessed": 1778833957328,
@@ -178,33 +196,15 @@
       "type": "file"
     },
     {
-      "path": "src\\context\\AppContext.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1778833988629,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\Landing.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1778831265135,
-      "type": "file"
-    },
-    {
       "path": "src\\components\\common\\DashNav.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1778831272182,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\hospital\\HospitalDash.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1778832179504,
+      "accessCount": 2,
+      "lastAccessed": 1778840538598,
       "type": "file"
     },
     {
       "path": "src\\pages\\platform\\Platform.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1778832462290,
+      "accessCount": 2,
+      "lastAccessed": 1778840690199,
       "type": "file"
     },
     {

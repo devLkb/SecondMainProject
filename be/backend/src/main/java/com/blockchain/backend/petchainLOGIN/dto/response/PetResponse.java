@@ -1,0 +1,60 @@
+package com.blockchain.backend.petchainLOGIN.dto.response;
+
+import com.blockchain.backend.petchainDB.entity.Pet;
+import lombok.Getter;
+
+import java.time.LocalDateTime;
+
+@Getter
+public class PetResponse {
+
+    private final Long petId;
+    private final String petNumber;
+    private final String name;
+    private final String species;
+    private final String breed;
+    private final Integer birthYear;
+    private final String gender;
+    private final Boolean isNeutered;
+    private final LocalDateTime registeredAt;
+    private final String message;
+
+    public PetResponse(Pet pet, String message) {
+        this(pet.getId(),
+                pet.getPetNumber(),
+                pet.getName(),
+                pet.getSpecies(),
+                pet.getBreed(),
+                pet.getBirthYear(),
+                pet.getGender(),
+                pet.getIsNeutered(),
+                pet.getRegisteredAt(),
+                message);
+    }
+
+    public PetResponse(Long petId,
+                       String petNumber,
+                       String name,
+                       String species,
+                       String breed,
+                       Integer birthYear,
+                       String gender,
+                       Boolean isNeutered,
+                       LocalDateTime registeredAt,
+                       String message) {
+        this.petId       = petId;
+        this.petNumber   = petNumber;
+        this.name        = name;
+        this.species     = species;
+        this.breed       = breed;
+        this.birthYear   = birthYear;
+        this.gender      = gender;
+        this.isNeutered  = isNeutered;
+        this.registeredAt = registeredAt;
+        this.message     = message;
+    }
+
+    public static PetResponse from(Pet pet, String message) {
+        return new PetResponse(pet, message);
+    }
+}

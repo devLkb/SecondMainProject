@@ -1,3 +1,6 @@
+# --- Claude Code ---
+.claude/settings.local.json
+
 # --- OS / editor ---
 .DS_Store
 Thumbs.db
@@ -7,6 +10,9 @@ Thumbs.db
 .vscode/
 *.iml
 .codex/
+.agents/
+.omc/
+.omx/
 
 # --- Logs / runtime ---
 *.log
@@ -40,12 +46,17 @@ coverage/
 .eslintcache
 vite.svg
 
+# --- Local docs / design files (README.md 제외) ---
+*.md
+!README.md
+*.html
+
 # --- Spring Boot / Gradle ---
 .gradle/
+.gradle-home/
 build/
 **/build/
 out/
-HELP.md
 .classpath
 .project
 .settings/
@@ -71,4 +82,3 @@ volumes/
 docker-compose.override.yml
 compose.override.yml
 override.yml
-

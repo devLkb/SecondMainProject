@@ -4,7 +4,7 @@ export default function DashNav({ role, tab, setTab, onLogout }) {
   const meta = ROLE_META[role]
   return (
     <div className="dash-gnb">
-      <div className="dash-logo">🐾 Pet<span>Chain</span></div>
+      <div className="dash-logo" onClick={onLogout} style={{ cursor: 'pointer' }} title="메인 화면으로">🐾 Pet<span>Chain</span></div>
       {meta.tabs.map(t => (
         <div
           key={t.id}
