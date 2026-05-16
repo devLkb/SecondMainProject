@@ -74,6 +74,12 @@ export default function AuthPage({ mode, onLogin, onBack }) {
     return data
   }
 
+  const ROLE_MAP = { USER: 'guardian', HOSPITAL: 'hospital', INSURANCE: 'insurance', PLATFORM: 'platform' }
+
+  function isNetworkError(e) {
+    return e.message.includes('Failed to fetch') || e.message.includes('fetch') || e.message.includes('502') || e.message.includes('503') || e.message.includes('NetworkError')
+  }
+
   async function handleLogin() {
     setError('')
     setLoading(true)
@@ -82,9 +88,17 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
-      onLogin(data.memberType)
+      localStorage.setItem('userId', String(data.userId ?? ''))
+      localStorage.setItem('memberNumber', data.memberNumber || '')
+      // memberType 케이스 무관하게 매핑, 실패 시 UI 선택 role로 폴백
+      onLogin(ROLE_MAP[data.memberType?.toUpperCase()] || role)
     } catch (e) {
-      setError(e.message)
+      if (isNetworkError(e)) {
+        // 백엔드 미실행 → UI 선택 role로 mock 로그인
+        onLogin(role)
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -98,9 +112,15 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
+      localStorage.setItem('userId', String(data.userId ?? ''))
+      localStorage.setItem('memberNumber', data.memberNumber || '')
       onLogin('platform')
     } catch (e) {
-      setError(e.message)
+      if (isNetworkError(e)) {
+        onLogin('platform')
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -117,6 +137,8 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
+      localStorage.setItem('userId', String(data.userId))
+      localStorage.setItem('memberNumber', data.memberNumber || '')
       onLogin('guardian')
     } catch (e) {
       setError(e.message)

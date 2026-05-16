@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import DashNav from '../../components/common/DashNav'
 import Overlay from '../../components/common/Overlay'
 import { useApp, generatePetId } from '../../context/AppContext'
+import apiFetch from '../../api/client'
 
 const REGIONS = [
   '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시',
@@ -582,15 +583,101 @@ export default function GuardianDash({ showToast, onLogout }) {
   const [detailRecord, setDetailRecord] = useState(null)
   const [newPet, setNewPet] = useState({ name: '', species: 'dog', breed: '', birthYear: '', chipNo: '', petId: '' })
 
+  // Load data from API on mount, fall back to mock data on failure
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [petsRes, recordsRes, consentsRes] = await Promise.allSettled([
+          apiFetch('/pets'),
+          apiFetch('/records?page=0&size=20'),
+          apiFetch('/consents?page=0&size=20'),
+        ])
+
+        if (petsRes.status === 'fulfilled') {
+          const apiPets = Array.isArray(petsRes.value) ? petsRes.value : []
+          if (apiPets.length > 0) {
+            const mapped = apiPets.map(p => ({
+              petId: String(p.id),
+              name: p.name,
+              species: p.species,
+              breed: p.breed,
+              birthYear: p.birthYear,
+              insurer: 'DB손해보험',
+            }))
+            update({ pets: mapped })
+          }
+        }
+
+        if (recordsRes.status === 'fulfilled') {
+          const content = recordsRes.value?.content
+          const apiRecords = Array.isArray(content) ? content : []
+          if (apiRecords.length > 0) {
+            const mapped = apiRecords.map(r => ({
+              id: String(r.id),
+              petId: String(r.petId),
+              petName: r.petName || '',
+              date: r.date || '',
+              diseases: Array.isArray(r.diseases) ? r.diseases : [],
+              treatments: Array.isArray(r.treatments) ? r.treatments : [],
+              cost: r.cost || 0,
+              memo: r.memo || '',
+              onChain: !!r.onChain,
+            }))
+            update({ medicalRecords: mapped })
+          }
+        }
+
+        if (consentsRes.status === 'fulfilled') {
+          const content = consentsRes.value?.content
+          const apiConsents = Array.isArray(content) ? content : []
+          if (apiConsents.length > 0) {
+            const statusMap = { ACTIVE: 'active', REVOKED: 'revoked', PENDING: 'pending' }
+            const mapped = {}
+            apiConsents.forEach(c => {
+              const key = String(c.recordId)
+              mapped[key] = {
+                consentId: String(c.id),
+                recordId: key,
+                status: statusMap[c.status] || (c.status || '').toLowerCase(),
+                insurerName: c.insurerName || '',
+                pet: c.petName || '',
+                disease: c.disease || '',
+                hospital: c.hospitalName || '',
+                cost: c.cost || 0,
+              }
+            })
+            update({ consents: mapped })
+          }
+        }
+      } catch (_) {
+        // Silently fall back to existing mock data
+      }
+    }
+    loadData()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const consents     = Object.values(state.consents)
   const activeCount  = consents.filter(c => c.status === 'active').length
   const revokedCount = consents.filter(c => c.status === 'revoked').length
 
-  const handleToggle = (recordId) => {
+  const handleToggle = async (recordId) => {
     const c    = state.consents[recordId]
     const next = c.status === 'active' ? 'revoked' : 'active'
+    // Optimistically update local state
     toggleConsent(recordId)
     showToast(next === 'active' ? '동의 완료' : '동의 철회', next === 'active' ? `${recordId} — 보험사에 서류 자동 전달 시작` : `${recordId} — 보험사 접근 차단됨`)
+    // Sync with API (graceful degradation on failure)
+    try {
+      if (c.status === 'active') {
+        // active → revoke
+        await apiFetch(`/consents/${c.consentId}/revoke`, { method: 'POST' })
+      } else {
+        // revoked/pending → re-consent
+        await apiFetch('/consents', { method: 'POST', body: { recordId: c.recordId, insuranceCompanyId: c.consentId } })
+      }
+    } catch (_) {
+      // API failure: local state already updated, no rollback needed for demo
+    }
   }
 
   const openPetModal = () => {
@@ -599,11 +686,29 @@ export default function GuardianDash({ showToast, onLogout }) {
     setModal('pet')
   }
 
-  const handleAddPet = () => {
+  const handleAddPet = async () => {
     const speciesMap = { dog: '강아지', cat: '고양이', rabbit: '토끼' }
-    addPet({ petId: newPet.petId, name: newPet.name, species: speciesMap[newPet.species] || newPet.species, breed: newPet.breed, birthYear: newPet.birthYear ? Number(newPet.birthYear) : '', chipNo: newPet.chipNo, insurer: 'DB손해보험' })
+    const petData = { petId: newPet.petId, name: newPet.name, species: speciesMap[newPet.species] || newPet.species, breed: newPet.breed, birthYear: newPet.birthYear ? Number(newPet.birthYear) : '', chipNo: newPet.chipNo, insurer: 'DB손해보험' }
+    addPet(petData)
     setModal(null)
     showToast('반려동물 등록', (newPet.name || '새 반려동물') + ' 등록 완료')
+    // Sync with API
+    try {
+      const created = await apiFetch('/pets', {
+        method: 'POST',
+        body: { name: newPet.name, species: speciesMap[newPet.species] || newPet.species, breed: newPet.breed, birthYear: newPet.birthYear ? Number(newPet.birthYear) : undefined, gender: '', isNeutered: false },
+      })
+      // Refresh pets list from API response
+      if (created && created.id) {
+        const refreshed = await apiFetch('/pets')
+        const apiPets = Array.isArray(refreshed) ? refreshed : []
+        if (apiPets.length > 0) {
+          update({ pets: apiPets.map(p => ({ petId: String(p.id), name: p.name, species: p.species, breed: p.breed, birthYear: p.birthYear, insurer: 'DB손해보험' })) })
+        }
+      }
+    } catch (_) {
+      // API failure: local state already updated via addPet()
+    }
   }
 
   return (

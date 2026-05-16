@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import DashNav from '../../components/common/DashNav'
 import Overlay from '../../components/common/Overlay'
 import { useApp } from '../../context/AppContext'
+import apiFetch from '../../api/client'
 
 const DISEASE_CODES = [
   { code: 'KC-001', name: '피부염' },
@@ -183,7 +184,7 @@ export default function HospitalDash({ showToast, onLogout }) {
   const toggleDisease   = code => setFormDiseases(p => p.includes(code) ? p.filter(c => c !== code) : [...p, code])
   const toggleTreatment = code => setFormTreatments(p => p.includes(code) ? p.filter(c => c !== code) : [...p, code])
 
-  const handleSubmitRecord = () => {
+  const handleSubmitRecord = async () => {
     if (!foundPet || !formCost || formDiseases.length === 0) {
       showToast('입력 오류', '환자 조회, 질병 코드, 진료비를 모두 입력하세요'); return
     }
@@ -203,6 +204,24 @@ export default function HospitalDash({ showToast, onLogout }) {
     }))
     showToast('원장 기록', `${foundPet.name} 진료기록 등록 완료 · 크레딧 +1`)
     setFoundPet(null); setSearchId(''); setFormDiseases([]); setFormTreatments([]); setFormCost(''); setFormMemo('')
+
+    // Sync with API (graceful degradation)
+    try {
+      const metadata = JSON.stringify({
+        petId:      foundPet.petId,
+        diseases:   formDiseases,
+        treatments: formTreatments,
+        cost:       Number(formCost),
+        date:       formDate,
+        memo:       formMemo,
+      })
+      const formData = new FormData()
+      formData.append('metadata', new Blob([metadata], { type: 'application/json' }))
+      formData.append('recordFile', new Blob(['record'], { type: 'application/octet-stream' }), 'record.bin')
+      await apiFetch('/records', { method: 'POST', body: formData, isFormData: true })
+    } catch (_) {
+      // API failure: local state already updated
+    }
   }
 
   return (

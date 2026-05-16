@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import DashNav from '../../components/common/DashNav'
 import { useApp } from '../../context/AppContext'
+import apiFetch from '../../api/client'
 
 // 이상 신고 사유 목록
 const FLAG_REASONS = [
@@ -22,11 +23,28 @@ export default function InsuranceDash({ showToast, onLogout }) {
   const [flagReason, setFlagReason] = useState('')
   const [flagNote, setFlagNote]     = useState('')
 
+  // Load point balance from API on mount
+  useEffect(() => {
+    async function loadBalance() {
+      try {
+        const userId = localStorage.getItem('userId')
+        if (!userId) return
+        const data = await apiFetch(`/insurers/${userId}/points/balance`)
+        if (data && data.balance !== undefined) {
+          setState(s => ({ ...s, ptBalance: data.balance }))
+        }
+      } catch (_) {
+        // Fall back to existing mock balance
+      }
+    }
+    loadBalance()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const activeConsents  = Object.values(state.consents).filter(c => c.status === 'active')
   const revokedConsents = Object.values(state.consents).filter(c => c.status === 'revoked')
 
   /* ── 검증 API 호출 ── */
-  const handleVerify = (c) => {
+  const handleVerify = async (c) => {
     if (state.ptBalance <= 0) {
       showToast('포인트 부족', '플랫폼에 포인트 충전을 요청하세요.')
       return
@@ -51,6 +69,16 @@ export default function InsuranceDash({ showToast, onLogout }) {
     setLastVerified(result)
     showToast('검증 완료', 'PASSED — 포인트 차감 (-1)')
     setTab('result')
+
+    // Sync with API (graceful degradation)
+    try {
+      const submission = await apiFetch('/submissions', { method: 'POST', body: { consentId: c.consentId } })
+      if (submission && submission.id) {
+        await apiFetch(`/submissions/${submission.id}/verification`, { method: 'POST' })
+      }
+    } catch (_) {
+      // API failure: local state already updated
+    }
   }
 
   /* ── 심사 결과 기록 ── */
