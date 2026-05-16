@@ -1,5 +1,12 @@
 import { useState } from 'react'
 
+const REGIONS = [
+  '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시',
+  '대전광역시', '울산광역시', '세종특별자치시',
+  '경기도', '강원도', '충청북도', '충청남도',
+  '전라북도', '전라남도', '경상북도', '경상남도', '제주특별자치도',
+]
+
 export default function AuthPage({ mode, onLogin, onBack }) {
   const [role, setRole] = useState('guardian')
   const [tab, setTab]   = useState(mode === 'signup' ? 'signup' : 'login')
@@ -136,6 +143,10 @@ export default function AuthPage({ mode, onLogin, onBack }) {
                     <div><label className="fl">비밀번호</label><input className="fi" type="password" placeholder="8자 이상" /></div>
                     <div><label className="fl">비밀번호 확인</label><input className="fi" type="password" placeholder="재입력" /></div>
                   </div>
+                  <label className="fl">거주 지역</label>
+                  <select className="fi" defaultValue="경기도">
+                    {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
                   <div className="fi-note">📌 개인정보는 AES-256 암호화 저장됩니다.</div>
                   <button className={`btn ${btnClass[role]}`} style={{ width: '100%', justifyContent: 'center', padding: 13 }} onClick={() => onLogin(role)}>
                     보호자로 가입하기

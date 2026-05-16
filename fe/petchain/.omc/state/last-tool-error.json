@@ -1,7 +1,7 @@
 {
-  "tool_name": "PowerShell",
-  "tool_input_preview": "{\"command\":\"cd \\\"C:\\\\Users\\\\ST-USER\\\\Desktop\\\\개발자 양성 교육\\\\블록체인프로젝트(하이퍼)\\\\pointpro\\\\fe\\\\petchain\\\"; node build.mjs 2>&1\",\"timeout\":30000,\"description\":\"Test updated build script\"}",
-  "error": "Exit code 9",
-  "timestamp": "2026-05-15T10:35:57.146Z",
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"type \\\"C:\\\\Users\\\\ST-USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-ST-USER\\\\bc9fda47-81fd-4562-b7d8-aad2ecef41d4\\\\tasks\\\\bw9ki2m59.output\\\"\",\"description\":\"Check dev server output\"}",
+  "error": "Exit code 1\n/usr/bin/bash: line 1: type: C:\\Users\\ST-USER\\AppData\\Local\\Temp\\claude\\C--Users-ST-USER\\bc9fda47-81fd-4562-b7d8-aad2ecef41d4\\tasks\\bw9ki2m59.output: not found",
+  "timestamp": "2026-05-16T06:37:10.298Z",
   "retry_count": 1
 }

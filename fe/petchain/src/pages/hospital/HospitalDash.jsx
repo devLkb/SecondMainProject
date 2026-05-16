@@ -148,6 +148,7 @@ export default function HospitalDash({ showToast, onLogout }) {
   const [formDiseases,    setFormDiseases]    = useState([])
   const [formTreatments,  setFormTreatments]  = useState([])
   const [formCost,        setFormCost]        = useState('')
+  const [formMemo,        setFormMemo]        = useState('')
 
   // 이전 진료기록 페이지네이션
   const [prevPage, setPrevPage]     = useState(0)
@@ -193,7 +194,7 @@ export default function HospitalDash({ showToast, onLogout }) {
       diseases:   formDiseases.map(code => `${code} · ${DISEASE_CODES.find(d => d.code === code)?.name}`),
       treatments: formTreatments.map(code => `${code} · ${TREATMENT_CODES.find(t => t.code === code)?.name}`),
       cost:       Number(formCost),
-      memo:       '',
+      memo:       formMemo,
     })
     setState(s => ({
       ...s,
@@ -201,7 +202,7 @@ export default function HospitalDash({ showToast, onLogout }) {
       txLog: [{ time: new Date().toLocaleTimeString(), type: '기록', org: 'hosp-001', desc: `${foundPet.name} 진료기록 등록 완료` }, ...s.txLog],
     }))
     showToast('원장 기록', `${foundPet.name} 진료기록 등록 완료 · 크레딧 +1`)
-    setFoundPet(null); setSearchId(''); setFormDiseases([]); setFormTreatments([]); setFormCost('')
+    setFoundPet(null); setSearchId(''); setFormDiseases([]); setFormTreatments([]); setFormCost(''); setFormMemo('')
   }
 
   return (
@@ -309,6 +310,15 @@ export default function HospitalDash({ showToast, onLogout }) {
                       <input className="fi" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
                     </div>
                   </div>
+                  <label className="fl">진료 소견</label>
+                  <textarea
+                    className="fi"
+                    rows={4}
+                    placeholder="진료 소견을 상세히 입력하세요. 보호자가 진료기록 조회 시 확인할 수 있습니다."
+                    value={formMemo}
+                    onChange={e => setFormMemo(e.target.value)}
+                    style={{ resize: 'vertical', fontFamily: 'inherit' }}
+                  />
                 </div>
 
                 <div className="card">

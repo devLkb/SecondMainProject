@@ -93,6 +93,54 @@ const initState = {
     { id: 'ins-001',  name: 'DB손해보험',   type: '보험사', fabricOrg: 'InsuranceA', date: '2024.01.15', status: 'active' },
     { id: 'ins-002',  name: '현대해상',     type: '보험사', fabricOrg: 'InsuranceB', date: '2024.03.01', status: 'pending' },
   ],
+
+  // 보호자 프로필
+  userRegion: '경기도',
+  userInsurers: [],
+
+  // 커뮤니티
+  posts: [
+    {
+      id: 'post-001', authorName: '홍길동', authorRegion: '경기도',
+      petName: '초코', petBreed: '말티즈',
+      content: '오늘 초코가 병원 다녀왔어요 🐶 생각보다 씩씩하게 잘 견뎌줬어요!',
+      imageUrl: null,
+      likes: ['경기도', '경기도', '서울특별시'],
+      comments: [{
+        id: 'cmt-001', authorName: '김철수', authorRegion: '서울특별시',
+        content: '귀엽네요!', likes: 2,
+        replies: [{ id: 'rep-001', authorName: '홍길동', content: '감사해요 ☺️', likes: 0 }],
+      }],
+      createdAt: '2024.05.08',
+      votes: { '경기도': 12, '서울특별시': 3 },
+      myVoted: false,
+    },
+    {
+      id: 'post-002', authorName: '이영희', authorRegion: '서울특별시',
+      petName: '뭉치', petBreed: '골든 리트리버',
+      content: '뭉치랑 한강 산책 다녀왔어요! 날씨가 너무 좋았어요 ☀️',
+      imageUrl: null,
+      likes: ['서울특별시', '서울특별시', '경기도'],
+      comments: [],
+      createdAt: '2024.05.09',
+      votes: { '서울특별시': 8, '경기도': 2 },
+      myVoted: false,
+    },
+    {
+      id: 'post-003', authorName: '박민준', authorRegion: '경기도',
+      petName: '쿠키', petBreed: '비숑 프리제',
+      content: '쿠키 오늘 첫 목욕했어요! 겁먹을까봐 걱정했는데 잘 참았네요 😄',
+      imageUrl: null,
+      likes: ['경기도', '경기도', '경기도'],
+      comments: [],
+      createdAt: '2024.05.10',
+      votes: { '경기도': 5 },
+      myVoted: false,
+    },
+  ],
+  votedPosts: [],
+  todayVoted: null,
+  likedPosts: [],
 }
 
 export const AppContext = createContext(null)
@@ -166,10 +214,13 @@ export const ROLE_META = {
     name: '홍길동', icon: '🐾', label: '보호자',
     bg: '#e0e7ff', color: '#3730a3',
     tabs: [
-      { id: 'home',    lbl: '내 반려동물' },
-      { id: 'consent', lbl: '동의 관리' },
-      { id: 'status',  lbl: '청구 상태' },
-      { id: 'records', lbl: '진료기록 확인' },
+      { id: 'home',      lbl: '내 반려동물' },
+      { id: 'consent',   lbl: '동의 관리' },
+      { id: 'status',    lbl: '청구 상태' },
+      { id: 'records',   lbl: '진료기록 확인' },
+      { id: 'community', lbl: '커뮤니티' },
+      { id: 'ranking',   lbl: '지역 랭킹' },
+      { id: 'myinfo',    lbl: '내 정보' },
     ],
   },
   hospital: {
