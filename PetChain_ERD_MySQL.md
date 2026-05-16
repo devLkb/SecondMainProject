@@ -41,7 +41,7 @@ erDiagram
         bigint      id              PK
         varchar     login_id        UK  "로그인 아이디"
         varchar     password_hash       "bcrypt 해시"
-        varchar     member_type         "guardian | hospital | insurance | admin"
+        varchar     member_type         "user | hospital | insurance | platform"
         varchar     status              "active | suspended | withdrawn"
         datetime    last_login_at
         datetime    created_at
@@ -61,6 +61,7 @@ erDiagram
     guardians {
         bigint      id              PK
         bigint      user_id         FK
+        varchar     member_number   UK  "GRD-YYYYNNNNN"
         varchar     name                "AES-256 암호화"
         varchar     phone               "AES-256 암호화"
         varchar     email
@@ -73,12 +74,14 @@ erDiagram
     hospitals {
         bigint      id              PK
         bigint      user_id         FK
+        varchar     member_number   UK  "HSP-YYYYNNNNN"
         varchar     name
         varchar     business_number
         varchar     address
         varchar     phone
         varchar     fabric_org_id       "HospitalA Org ID"
-        tinyint     is_active
+        varchar     admin_email
+        tinyint     is_active           "0=승인대기 1=활성"
         datetime    created_at
         datetime    updated_at
     }
@@ -86,9 +89,11 @@ erDiagram
     insurance_companies {
         bigint      id              PK
         bigint      user_id         FK
+        varchar     member_number   UK  "INS-YYYYNNNNN"
         varchar     name
         varchar     business_number
         varchar     fabric_org_id       "InsuranceA Org ID"
+        varchar     admin_email
         datetime    created_at
         datetime    updated_at
     }
@@ -96,6 +101,7 @@ erDiagram
     pets {
         bigint      id              PK
         bigint      guardian_id     FK
+        varchar     pet_number      UK  "PET-YYYYNNNNN"
         varchar     name
         varchar     species             "dog | cat | rabbit | other"
         varchar     breed
@@ -333,7 +339,7 @@ CREATE TABLE users (
     login_id        VARCHAR(100) NOT NULL UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
     member_type     VARCHAR(20)  NOT NULL
-                    CHECK (member_type IN ('guardian','hospital','insurance','admin')),
+                    CHECK (member_type IN ('user','hospital','insurance','platform')),
     status          VARCHAR(20)  NOT NULL DEFAULT 'active'
                     CHECK (status IN ('active','suspended','withdrawn')),
     last_login_at DATETIME,
@@ -374,6 +380,7 @@ CREATE INDEX idx_rt_expires_at ON refresh_tokens(expires_at);
 CREATE TABLE guardians (
     id                BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id           BIGINT       NOT NULL UNIQUE,
+    member_number     VARCHAR(20)  NOT NULL UNIQUE,  -- GRD-YYYYNNNNN
     name              VARCHAR(255) NOT NULL,    -- AES-256 암호화
     phone             VARCHAR(255),             -- AES-256 암호화
     email             VARCHAR(255),
@@ -396,12 +403,14 @@ ALTER TABLE guardians ADD CONSTRAINT fk_guardians_user FOREIGN KEY (user_id) REF
 CREATE TABLE hospitals (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id         BIGINT       NOT NULL UNIQUE,
+    member_number   VARCHAR(20)  NOT NULL UNIQUE,  -- HSP-YYYYNNNNN
     name            VARCHAR(200) NOT NULL,
     business_number VARCHAR(20)  UNIQUE,
     address         MEDIUMTEXT,
     phone           VARCHAR(30),
     fabric_org_id   VARCHAR(100) UNIQUE,
-    is_active       TINYINT(1)   NOT NULL DEFAULT 1,
+    admin_email     VARCHAR(255),
+    is_active       TINYINT(1)   NOT NULL DEFAULT 0,  -- 관리자 승인 후 1로 변경
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -417,9 +426,11 @@ ALTER TABLE hospitals ADD CONSTRAINT fk_hospitals_user FOREIGN KEY (user_id) REF
 CREATE TABLE insurance_companies (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id         BIGINT       NOT NULL UNIQUE,
+    member_number   VARCHAR(20)  NOT NULL UNIQUE,  -- INS-YYYYNNNNN
     name            VARCHAR(200) NOT NULL,
     business_number VARCHAR(20)  UNIQUE,
     fabric_org_id   VARCHAR(100) UNIQUE,
+    admin_email     VARCHAR(255),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -435,6 +446,7 @@ ALTER TABLE insurance_companies ADD CONSTRAINT fk_ins_user FOREIGN KEY (user_id)
 CREATE TABLE pets (
     id             BIGINT AUTO_INCREMENT PRIMARY KEY,
     guardian_id    BIGINT       NOT NULL,
+    pet_number     VARCHAR(20)  NOT NULL UNIQUE,  -- PET-YYYYNNNNN
     name           VARCHAR(100) NOT NULL,
     species        VARCHAR(30)  NOT NULL,
     breed          VARCHAR(100),
@@ -546,7 +558,7 @@ CREATE TABLE medical_records (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ALTER TABLE medical_records ADD CONSTRAINT fk_mr_hospital FOREIGN KEY (hospital_id) REFERENCES hospitals(id);
 ALTER TABLE medical_records ADD CONSTRAINT fk_mr_pet FOREIGN KEY (pet_id) REFERENCES pets(id);
-ALTER TABLE medical_records ADD CONSTRAINT fk_mr_disease FOREIGN KEY (disease_code) REFERENCES disease_codes(code);
+-- 질병코드는 medical_record_diseases 중간 테이블로 관리 (다:다 관계)
 
 CREATE INDEX idx_mr_hospital_id    ON medical_records(hospital_id);
 CREATE INDEX idx_mr_pet_id         ON medical_records(pet_id);
@@ -846,6 +858,7 @@ audit_logs      ←── users (nullable)
 ## 수정 이력 추가
 
 | v1.5 | PostgreSQL → MySQL 8.0+ InnoDB 전환: `BIGSERIAL`→`BIGINT AUTO_INCREMENT`, `BOOLEAN`→`TINYINT(1)`, `JSONB`→`JSON`, `TEXT(암호화)`→`MEDIUMTEXT`, `TIMESTAMP DEFAULT NOW()`→`DATETIME DEFAULT CURRENT_TIMESTAMP`, `updated_at ON UPDATE CURRENT_TIMESTAMP` 네이티브 지원으로 트리거 제거, 인라인 REFERENCES → 명시적 `ALTER TABLE ADD CONSTRAINT FK`, `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4` 추가 |
+| v1.6 | **[CRITICAL BUG FIX]** `users.member_type` CHECK 제약 `'guardian'` → `'user'` 수정 (코드에서 보호자 등록 시 memberType='user'로 저장하므로 'guardian'이면 INSERT 실패) / `guardians` 에 `member_number` 컬럼 추가 / `hospitals` 에 `member_number`, `admin_email` 컬럼 추가, `is_active DEFAULT 1` → `DEFAULT 0` 수정 (관리자 승인 전 비활성 상태) / `insurance_companies` 에 `member_number`, `admin_email` 컬럼 추가 / `pets` 에 `pet_number` 컬럼 추가 — 모두 JPA 엔티티와 일치시킴 |
 
 ---
 

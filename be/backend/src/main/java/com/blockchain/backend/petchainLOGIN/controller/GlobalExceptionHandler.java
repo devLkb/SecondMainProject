@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
                         (a, b) -> a
                 ));
         return ResponseEntity.badRequest().body(Map.of(
-                "error", "입력값이 올바르지 않습니다.",
+                "message", "입력값이 올바르지 않습니다.",
                 "fields", fieldErrors
         ));
     }
@@ -30,12 +30,18 @@ public class GlobalExceptionHandler {
     // 비즈니스 로직 오류 (중복, 잘못된 입력 등)
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleBadRequest(IllegalArgumentException e) {
-        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
     }
 
     // 상태 오류 (승인 대기, 탈퇴 등)
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleForbidden(IllegalStateException e) {
-        return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        return ResponseEntity.status(403).body(Map.of("message", e.getMessage()));
+    }
+
+    // 그 외 모든 예외 (DB 오류 등)
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleGeneral(Exception e) {
+        return ResponseEntity.internalServerError().body(Map.of("message", "서버 오류가 발생했습니다."));
     }
 }

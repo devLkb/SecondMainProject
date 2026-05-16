@@ -21,7 +21,6 @@ export default function Platform({ showToast, onLogout }) {
   const tabs = [
     { id: 'org',     lbl: 'Org 관리' },
     { id: 'point',   lbl: '포인트 발행' },
-    { id: 'code',    lbl: '표준 코드' },
     { id: 'flag',    lbl: '이상 신고', badge: (state.flaggedRecords || []).filter(f => f.status === 'PENDING').length },
     { id: 'monitor', lbl: '모니터링' },
   ]
@@ -185,43 +184,6 @@ export default function Platform({ showToast, onLogout }) {
                   <thead><tr><th>병원</th><th>크레딧</th></tr></thead>
                   <tbody>
                     <tr><td style={{ fontWeight: 600 }}>행복동물병원</td><td style={{ fontWeight: 800, color: 'var(--success)' }}>{state.creditN}</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── 표준 코드 ── */}
-        {tab === 'code' && (
-          <div className="fade-in">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
-              <div>
-                <div className="pane-h">표준 코드 관리</div>
-                <div className="pane-sub" style={{ marginBottom: 0 }}>질병·진료 행위 코드를 등록·수정합니다</div>
-              </div>
-              <button className="btn btn-primary">+ 코드 추가</button>
-            </div>
-            <div className="g2">
-              <div className="card">
-                <div className="card-title">질병 코드 (disease_codes)</div>
-                <table className="tbl">
-                  <thead><tr><th>코드</th><th>한글명</th><th>카테고리</th><th></th></tr></thead>
-                  <tbody>
-                    {[['KC-001','피부염','피부'],['KC-042','골절','근골격'],['KC-055','관절염','근골격'],['KC-108','슬개골 탈구','근골격']].map(([c,n,k]) => (
-                      <tr key={c}><td><span className="mono">{c}</span></td><td style={{ fontWeight: 600 }}>{n}</td><td><span className="badge badge-muted">{k}</span></td><td><button className="btn btn-ghost btn-sm">수정</button></td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="card">
-                <div className="card-title">진료 행위 코드 (treatment_codes)</div>
-                <table className="tbl">
-                  <thead><tr><th>코드</th><th>한글명</th><th>카테고리</th><th></th></tr></thead>
-                  <tbody>
-                    {[['VA-011','X-ray 촬영','영상검사'],['VA-025','수술','처치'],['VA-032','약물 처방','처방']].map(([c,n,k]) => (
-                      <tr key={c}><td><span className="mono">{c}</span></td><td style={{ fontWeight: 600 }}>{n}</td><td><span className="badge badge-muted">{k}</span></td><td><button className="btn btn-ghost btn-sm">수정</button></td></tr>
-                    ))}
                   </tbody>
                 </table>
               </div>

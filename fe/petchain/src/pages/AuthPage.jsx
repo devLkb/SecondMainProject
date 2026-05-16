@@ -62,7 +62,8 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    const data = await res.json()
+    let data = {}
+    try { data = await res.json() } catch (_) {}
     if (!res.ok) throw new Error(data.message || '요청에 실패했습니다.')
     return data
   }
@@ -75,7 +76,8 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
-      onLogin(data.memberType)
+      const roleMap = { user: 'guardian', hospital: 'hospital', insurance: 'insurance', admin: 'platform' }
+      onLogin(roleMap[data.memberType] || data.memberType)
     } catch (e) {
       setError(e.message)
     } finally {
