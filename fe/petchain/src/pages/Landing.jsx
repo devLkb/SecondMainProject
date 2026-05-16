@@ -87,7 +87,7 @@ export default function Landing({ onGoAuth }) {
 
       {/* ── HERO ── */}
       <div
-        style={{ position: 'relative', width: '100vw', height: `calc(100vh - ${GNB_H}px)`, overflow: 'hidden' }}
+        style={{ position: 'relative', width: '100vw', height: `calc(80vh - ${GNB_H}px)`, overflow: 'hidden' }}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHover('')}
       >
