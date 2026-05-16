@@ -79,10 +79,161 @@ function speciesIcon(species) {
   return '🐾'
 }
 
+const PAGE_SIZE = 7
+const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
+
+/* ── 월 캘린더 피커 ── */
+function MonthPicker({ selectedYear, selectedMonth, onChange, onClear }) {
+  const [open, setOpen]     = useState(false)
+  const [viewYear, setViewYear] = useState(selectedYear || new Date().getFullYear())
+  const label = selectedYear ? `${selectedYear}년 ${selectedMonth}월` : '전체 기간'
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 130 }}
+      >
+        📅 {label} <span style={{ fontSize: 10, color: 'var(--muted)' }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 200,
+          background: 'var(--surface)', border: '1.5px solid var(--border)',
+          borderRadius: 14, boxShadow: 'var(--shadow-lg)', padding: 18, width: 260,
+        }}>
+          {/* 연도 네비 */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setViewYear(y => y - 1)}>←</button>
+            <span style={{ fontWeight: 800, fontSize: 15 }}>{viewYear}년</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setViewYear(y => y + 1)}>→</button>
+          </div>
+          {/* 월 그리드 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+            {MONTHS.map((m, i) => {
+              const mon = i + 1
+              const isSelected = selectedYear === viewYear && selectedMonth === mon
+              return (
+                <button key={mon}
+                  onClick={() => { onChange(viewYear, mon); setOpen(false) }}
+                  style={{
+                    padding: '8px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: isSelected ? 700 : 400,
+                    background: isSelected ? 'var(--brand)' : 'transparent',
+                    color: isSelected ? '#fff' : 'var(--text)', transition: 'background .12s',
+                  }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--brand-xl)' }}
+                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                >{m}</button>
+              )
+            })}
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
+            onClick={() => { onClear(); setOpen(false) }}>
+            전체 기간 보기
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── 진료기록 탭 컴포넌트 ── */
+function RecordsTab({ records, onDetail }) {
+  const [page, setPage]               = useState(0)
+  const [filterYear, setFilterYear]   = useState(null)
+  const [filterMonth, setFilterMonth] = useState(null)
+
+  const filtered = records.filter(r => {
+    if (!filterYear) return true
+    const parts = r.date.split('.')
+    return Number(parts[0]) === filterYear && Number(parts[1]) === filterMonth
+  })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages - 1)
+  const paged      = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+
+  const handleMonthChange = (y, m) => { setFilterYear(y); setFilterMonth(m); setPage(0) }
+  const handleClear       = () => { setFilterYear(null); setFilterMonth(null); setPage(0) }
+
+  return (
+    <div className="fade-in">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24 }}>
+        <div>
+          <div className="pane-h">진료기록 확인</div>
+          <div className="pane-sub" style={{ marginBottom: 0 }}>행을 클릭하면 소견을 볼 수 있습니다</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {filterYear && (
+            <span className="badge badge-brand" style={{ fontSize: 12 }}>
+              {filterYear}년 {filterMonth}월 · {filtered.length}건
+            </span>
+          )}
+          <MonthPicker
+            selectedYear={filterYear} selectedMonth={filterMonth}
+            onChange={handleMonthChange} onClear={handleClear}
+          />
+        </div>
+      </div>
+
+      <div className="card">
+        <table className="tbl">
+          <thead>
+            <tr><th>기록 ID</th><th>반려동물</th><th>진료일</th><th>질병 코드</th><th>진료비</th><th>블록체인</th><th></th></tr>
+          </thead>
+          <tbody>
+            {paged.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', color: 'var(--muted)', padding: 56 }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+                  <div style={{ fontWeight: 700 }}>
+                    {filterYear ? `${filterYear}년 ${filterMonth}월 진료기록이 없습니다` : '등록된 진료기록이 없습니다'}
+                  </div>
+                </td>
+              </tr>
+            ) : paged.map(r => (
+              <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => onDetail(r)}>
+                <td><span className="mono">{r.id}</span></td>
+                <td style={{ fontWeight: 600 }}>{r.petName}</td>
+                <td>{r.date}</td>
+                <td style={{ fontSize: 13 }}>{r.diseases.join(', ')}</td>
+                <td style={{ fontWeight: 600 }}>{r.cost.toLocaleString()}원</td>
+                <td><span className={`badge ${r.onChain ? 'badge-success' : 'badge-warning'}`}>{r.onChain ? '원장 기록' : '미기록'}</span></td>
+                <td><button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); onDetail(r) }}>상세 보기</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* 페이지네이션 */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+            <button className="btn btn-ghost btn-sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>← 이전</button>
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button key={i} className="btn btn-sm" onClick={() => setPage(i)} style={{
+                minWidth: 34,
+                background: i === safePage ? 'var(--brand)' : 'transparent',
+                color: i === safePage ? '#fff' : 'var(--text)',
+                border: i === safePage ? 'none' : '1.5px solid var(--border)',
+                fontWeight: i === safePage ? 700 : 400,
+              }}>{i + 1}</button>
+            ))}
+            <button className="btn btn-ghost btn-sm" disabled={safePage === totalPages - 1} onClick={() => setPage(safePage + 1)}>다음 →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function GuardianDash({ showToast, onLogout }) {
   const { state, toggleConsent, addPet } = useApp()
   const [tab, setTab]     = useState('home')
   const [modal, setModal] = useState(null)
+  const [detailRecord, setDetailRecord] = useState(null)
   const [newPet, setNewPet] = useState({ name: '', species: 'dog', breed: '', birthYear: '', chipNo: '', petId: '' })
 
   const consents    = Object.values(state.consents)
@@ -142,18 +293,38 @@ export default function GuardianDash({ showToast, onLogout }) {
               </div>
             </div>
 
-            {/* 요약 stat */}
+            {/* 요약 stat — 클릭 시 탭 이동 */}
             <div className="g3" style={{ marginBottom: 28 }}>
-              {[
-                { n: state.medicalRecords.length, l: '총 진료기록', c: 'var(--brand)', bg: 'var(--brand-xl)' },
-                { n: activeCount,                 l: '동의 활성',   c: 'var(--success)', bg: 'var(--success-xl)' },
-                { n: revokedCount,                l: '동의 철회',   c: 'var(--danger)',  bg: 'var(--danger-xl)' },
-              ].map((s, i) => (
-                <div key={i} className="stat-box" style={{ background: s.bg, border: `1px solid ${s.c}22` }}>
-                  <div className="stat-n" style={{ color: s.c }}>{s.n}</div>
-                  <div className="stat-l" style={{ color: s.c, opacity: .75 }}>{s.l}</div>
-                </div>
-              ))}
+              <div
+                className="stat-box"
+                onClick={() => setTab('records')}
+                style={{ background: 'var(--brand-xl)', border: '1px solid var(--brand)22', cursor: 'pointer', transition: 'box-shadow .15s' }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+              >
+                <div className="stat-n" style={{ color: 'var(--brand)' }}>{state.medicalRecords.length}</div>
+                <div className="stat-l" style={{ color: 'var(--brand)', opacity: .75 }}>총 진료기록 · 클릭하여 확인</div>
+              </div>
+              <div
+                className="stat-box"
+                onClick={() => setTab('consent')}
+                style={{ background: 'var(--success-xl)', border: '1px solid var(--success)22', cursor: 'pointer', transition: 'box-shadow .15s' }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+              >
+                <div className="stat-n" style={{ color: 'var(--success)' }}>{activeCount}</div>
+                <div className="stat-l" style={{ color: 'var(--success)', opacity: .75 }}>동의 활성 · 클릭하여 관리</div>
+              </div>
+              <div
+                className="stat-box"
+                onClick={() => setTab('consent')}
+                style={{ background: 'var(--danger-xl)', border: '1px solid var(--danger)22', cursor: 'pointer', transition: 'box-shadow .15s' }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+              >
+                <div className="stat-n" style={{ color: 'var(--danger)' }}>{revokedCount}</div>
+                <div className="stat-l" style={{ color: 'var(--danger)', opacity: .75 }}>동의 철회 · 클릭하여 관리</div>
+              </div>
             </div>
 
             {/* 반려동물 카드 */}
@@ -183,51 +354,25 @@ export default function GuardianDash({ showToast, onLogout }) {
                     <span style={{ fontWeight: 700, color: 'var(--success)' }}>{activeCount}건</span>
                   </div>
                   <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ width: '100%', marginTop: 16, justifyContent: 'center' }}
-                    onClick={() => setTab('consent')}
+                    className="btn btn-primary btn-sm"
+                    style={{ width: '100%', marginTop: 16, justifyContent: 'center', fontWeight: 700 }}
+                    onClick={() => setTab('records')}
                   >
-                    동의 관리하기 →
+                    📋 진료기록 확인
                   </button>
                 </div>
               ))}
             </div>
 
-            {/* 의료기록 */}
-            <div className="card" style={{ marginTop: 28 }}>
-              <div className="card-title">의료기록</div>
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>기록 ID</th>
-                    <th>반려동물</th>
-                    <th>PetChain ID</th>
-                    <th>진료일</th>
-                    <th>질병 코드</th>
-                    <th>진료비</th>
-                    <th>체인 기록</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.medicalRecords.map(r => (
-                    <tr key={r.id}>
-                      <td><span className="mono">{r.id}</span></td>
-                      <td style={{ fontWeight: 600 }}>{r.petName}</td>
-                      <td><span className="mono" style={{ fontSize: 12, color: 'var(--brand)' }}>{r.petId}</span></td>
-                      <td>{r.date}</td>
-                      <td style={{ fontSize: 12 }}>{r.diseases.join(', ')}</td>
-                      <td>{r.cost.toLocaleString()}원</td>
-                      <td>
-                        <span className={`badge ${r.onChain ? 'badge-success' : 'badge-warning'}`}>
-                          {r.onChain ? '원장 기록' : '미기록'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
+        )}
+
+        {/* ── 진료기록 확인 ── */}
+        {tab === 'records' && (
+          <RecordsTab
+            records={state.medicalRecords}
+            onDetail={setDetailRecord}
+          />
         )}
 
         {/* ── 동의 관리 ── */}
@@ -406,6 +551,55 @@ export default function GuardianDash({ showToast, onLogout }) {
           >
             등록 완료
           </button>
+        </Overlay>
+      )}
+
+      {/* ── 진료기록 상세 모달 ── */}
+      {detailRecord && (
+        <Overlay title="진료기록 상세" sub={detailRecord.id} onClose={() => setDetailRecord(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {[
+                ['반려동물', detailRecord.petName],
+                ['진료일',   detailRecord.date],
+                ['병원',     detailRecord.hospital || '행복동물병원'],
+                ['진료비',   `${detailRecord.cost.toLocaleString()}원`],
+              ].map(([k, v]) => (
+                <div key={k} style={{ background: 'var(--bg-2)', borderRadius: 8, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>{k}</div>
+                  <div style={{ fontWeight: 600 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>질병 코드</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {detailRecord.diseases.map(d => <span key={d} className="badge badge-brand" style={{ fontSize: 12 }}>{d}</span>)}
+              </div>
+            </div>
+            {detailRecord.treatments?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>진료 행위</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {detailRecord.treatments.map(t => <span key={t} className="badge badge-orange" style={{ fontSize: 12 }}>{t}</span>)}
+                </div>
+              </div>
+            )}
+            {detailRecord.memo && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>진료 소견</div>
+                <div style={{ background: 'var(--bg-2)', borderRadius: 8, padding: '12px 14px', fontSize: 14, color: 'var(--text-2)', lineHeight: 1.7 }}>
+                  {detailRecord.memo}
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>블록체인 기록</span>
+              <span className={`badge ${detailRecord.onChain ? 'badge-success' : 'badge-warning'}`}>
+                {detailRecord.onChain ? '원장 기록 완료' : '미기록'}
+              </span>
+            </div>
+          </div>
         </Overlay>
       )}
     </>

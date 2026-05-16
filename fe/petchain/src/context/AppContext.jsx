@@ -169,6 +169,7 @@ export const ROLE_META = {
       { id: 'home',    lbl: '내 반려동물' },
       { id: 'consent', lbl: '동의 관리' },
       { id: 'status',  lbl: '청구 상태' },
+      { id: 'records', lbl: '진료기록 확인' },
     ],
   },
   hospital: {
