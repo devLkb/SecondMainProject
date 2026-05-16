@@ -117,7 +117,13 @@ function MonthPicker({ selectedYear, selectedMonth, onChange, onClear }) {
               const isSelected = selectedYear === viewYear && selectedMonth === mon
               return (
                 <button key={mon}
-                  onClick={() => { onChange(viewYear, mon); setOpen(false) }}
+                  onClick={() => {
+                    if (selectedYear === viewYear && selectedMonth === mon) {
+                      onClear(); setOpen(false)
+                    } else {
+                      onChange(viewYear, mon); setOpen(false)
+                    }
+                  }}
                   style={{
                     padding: '8px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
                     fontSize: 13, fontWeight: isSelected ? 700 : 400,
