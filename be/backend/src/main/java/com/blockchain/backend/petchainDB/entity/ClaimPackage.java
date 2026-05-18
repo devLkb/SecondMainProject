@@ -18,7 +18,7 @@ public class ClaimPackage extends TimestampedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "claim_id", nullable = false, unique = true, length = 30)
+    @Column(name = "claim_id", nullable = false, unique = true, length = 40)
     private String claimId;
 
     @ManyToOne(fetch = FetchType.LAZY)

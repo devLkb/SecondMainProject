@@ -24,10 +24,10 @@ public class NftToken {
     @JoinColumn(name = "claim_package_id", nullable = false, unique = true)
     private ClaimPackage claimPackage;
 
-    @Column(name = "record_id", nullable = false, length = 30)
+    @Column(name = "record_id", nullable = false, length = 40)
     private String recordId;
 
-    @Column(name = "claim_id", nullable = false, length = 30)
+    @Column(name = "claim_id", nullable = false, length = 40)
     private String claimId;
 
     @Column(name = "detail_hash", nullable = false, length = 64)

@@ -17,7 +17,7 @@ public class MedicalRecord extends TimestampedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "record_id", nullable = false, unique = true, length = 30)
+    @Column(name = "record_id", nullable = false, unique = true, length = 40)
     private String recordId;
 
     @ManyToOne(fetch = FetchType.LAZY)
