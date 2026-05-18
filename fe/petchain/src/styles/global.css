@@ -415,6 +415,34 @@ body { margin: 0; line-height: 1.6; }
 }
 
 /* ══════════════════════════════════════
+   OAUTH
+══════════════════════════════════════ */
+.oauth-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 20px 0 14px; color: var(--muted-l);
+  font-size: 12px; font-weight: 500;
+}
+.oauth-divider::before, .oauth-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.oauth-btns { display: flex; flex-direction: column; gap: 10px; }
+.oauth-btn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 11px 16px; border-radius: 10px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  border: 1.5px solid var(--border); background: var(--surface);
+  font-family: inherit; transition: all .18s; color: var(--text-2);
+  box-shadow: var(--shadow-xs);
+}
+.oauth-btn:hover { box-shadow: var(--shadow-sm); border-color: var(--border-d); }
+.oauth-naver { color: #fff !important; background: #03c75a; border-color: #03c75a; }
+.oauth-naver:hover { background: #02b350; border-color: #02b350; }
+.oauth-kakao { color: #3d1d1c !important; background: #fee500; border-color: #fee500; }
+.oauth-kakao:hover { background: #fada00; border-color: #fada00; }
+.oauth-google { color: var(--text-2); background: var(--surface); border-color: var(--border); }
+.oauth-google:hover { background: var(--bg-2); }
+
+/* ══════════════════════════════════════
    ANIMATIONS
 ══════════════════════════════════════ */
 @keyframes pulse { 0%,100%{opacity:1;}50%{opacity:.35;} }

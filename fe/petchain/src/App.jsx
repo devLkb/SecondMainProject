@@ -11,18 +11,43 @@ import './styles/global.css'
 
 const ROLE_MAP = { USER: 'guardian', HOSPITAL: 'hospital', INSURANCE: 'insurance', PLATFORM: 'platform' }
 
-function restoreRole() {
+function initFromUrl() {
+  const params       = new URLSearchParams(window.location.search)
+  const accessToken  = params.get('accessToken')
+  const refreshToken = params.get('refreshToken')
+  const memberType   = params.get('memberType')
+  const userId       = params.get('userId')
+  const memberNumber = params.get('memberNumber')
+  const oauthError   = params.get('error')
+
+  if (oauthError) {
+    window.history.replaceState({}, '', '/')
+    return { page: 'auth', role: null, toast: { title: 'OAuth 오류', msg: decodeURIComponent(oauthError) } }
+  }
+
+  if (accessToken) {
+    localStorage.setItem('accessToken', accessToken)
+    localStorage.setItem('refreshToken', refreshToken || '')
+    localStorage.setItem('memberType', memberType || 'USER')
+    localStorage.setItem('userId', userId || '')
+    localStorage.setItem('memberNumber', memberNumber || '')
+    window.history.replaceState({}, '', '/')
+    const role = ROLE_MAP[memberType?.toUpperCase()] || 'guardian'
+    return { page: 'main', role, toast: null }
+  }
+
   const token = localStorage.getItem('accessToken')
   const mt    = localStorage.getItem('memberType')
-  if (!token || !mt) return null
-  return ROLE_MAP[mt.toUpperCase()] || null
+  const role  = (token && mt) ? (ROLE_MAP[mt.toUpperCase()] || null) : null
+  return { page: role ? 'main' : 'landing', role, toast: null }
 }
 
 function Inner() {
-  const [page, setPage]   = useState(() => restoreRole() ? 'main' : 'landing')
+  const [{ page: initPage, role: initRole, toast: initToast }] = useState(initFromUrl)
+  const [page, setPage]         = useState(initPage)
   const [authMode, setAuthMode] = useState('login')
-  const [role, setRole]   = useState(restoreRole)
-  const [toast, setToast] = useState(null)
+  const [role, setRole]         = useState(initRole)
+  const [toast, setToast]       = useState(initToast)
 
   const showToast = (title, msg) => setToast({ title, msg })
 

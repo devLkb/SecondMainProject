@@ -63,14 +63,7 @@ export default function Landing({ onGoAuth }) {
         <div style={{ fontSize: 17, fontWeight: 800, color: '#1e1b4b', cursor: 'pointer', marginRight: 40, whiteSpace: 'nowrap' }}>
           🐾 Pet<span style={{ color: '#6366f1' }}>Chain</span>
         </div>
-        <div style={{ display: 'flex', gap: 28, flex: 1 }}>
-          {['서비스 소개', '참여자', '기술 문서', 'FAQ'].map(l => (
-            <span key={l} style={{ fontSize: 14, fontWeight: 500, color: '#52525b', cursor: 'pointer', transition: 'color .15s' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#4338ca'}
-              onMouseLeave={e => e.currentTarget.style.color = '#52525b'}
-            >{l}</span>
-          ))}
-        </div>
+        <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             onClick={() => onGoAuth('login')}
