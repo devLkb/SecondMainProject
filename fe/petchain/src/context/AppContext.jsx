@@ -95,7 +95,7 @@ const initState = {
   ],
 
   // 보호자 프로필
-  userRegion: '경기도',
+  userRegion: null,
   userInsurers: [],
 
   // 커뮤니티

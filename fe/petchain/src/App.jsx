@@ -18,7 +18,7 @@ function initFromUrl() {
   const memberType   = params.get('memberType')
   const userId       = params.get('userId')
   const memberNumber = params.get('memberNumber')
-  const oauthError   = params.get('error')
+  const oauthError   = params.get('oauth_error') || params.get('error')
 
   if (oauthError) {
     window.history.replaceState({}, '', '/')

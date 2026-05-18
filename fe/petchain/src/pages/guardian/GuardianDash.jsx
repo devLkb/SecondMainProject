@@ -252,8 +252,94 @@ function MyInfoTab({ state, update, showToast }) {
   )
 }
 
+/* ── RegionBanner ── */
+function RegionBanner({ userRegion, onSave }) {
+  const [editing,  setEditing]  = useState(!userRegion)
+  const [selected, setSelected] = useState(userRegion || REGIONS[0])
+  const [saving,   setSaving]   = useState(false)
+
+  const handleSave = async () => {
+    if (!selected) return
+    setSaving(true)
+    await onSave(selected)
+    setSaving(false)
+    setEditing(false)
+  }
+
+  if (!editing && userRegion) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px',
+        borderRadius: 14, marginBottom: 20,
+        background: 'linear-gradient(135deg, var(--brand-xl) 0%, #f0f4ff 100%)',
+        border: '1.5px solid var(--brand-l)',
+      }}>
+        <span style={{ fontSize: 20 }}>📍</span>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>내 거주지역</span>
+          <span className="badge badge-brand" style={{ fontSize: 12 }}>{userRegion}</span>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>· 내 지역 게시물에만 투표(추천)할 수 있어요</span>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>변경</button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      padding: '26px 28px', borderRadius: 18, marginBottom: 24,
+      background: 'linear-gradient(135deg, #4338ca 0%, #6366f1 60%, #818cf8 100%)',
+      boxShadow: '0 6px 24px rgba(67,56,202,.30)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+          background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26,
+        }}>📍</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+            내 거주지역을 설정해주세요
+          </div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,.75)', lineHeight: 1.7, marginBottom: 18 }}>
+            커뮤니티 투표(추천)는 <strong style={{ color: '#c7d2fe' }}>같은 지역 주민</strong>만 참여할 수 있어요.<br />
+            지역을 설정하면 우리 동네 반려동물 친구들을 응원할 수 있습니다! 🐾
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              className="fi"
+              style={{ margin: 0, flex: 1, maxWidth: 260, background: 'rgba(255,255,255,.96)', fontWeight: 600 }}
+              value={selected}
+              onChange={e => setSelected(e.target.value)}
+            >
+              {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <button
+              className="btn"
+              style={{ background: '#fff', color: 'var(--brand)', fontWeight: 800, border: 'none', padding: '11px 24px', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? '저장 중…' : '설정 완료'}
+            </button>
+            {userRegion && (
+              <button className="btn btn-ghost btn-sm" style={{ color: 'rgba(255,255,255,.7)', border: '1px solid rgba(255,255,255,.25)' }} onClick={() => setEditing(false)}>취소</button>
+            )}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 24, marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,.15)', flexWrap: 'wrap' }}>
+        {[['🗳️', '내 지역 게시물에만 투표 가능'], ['🐾', '우리 동네 반려동물 이야기'], ['🏆', '지역별 랭킹에 반영']].map(([icon, text]) => (
+          <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,.65)' }}>
+            <span>{icon}</span><span>{text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /* ── CommunityTab ── */
-function CommunityTab({ state, update, showToast }) {
+function CommunityTab({ state, update, showToast, onRegionSave }) {
   const [filter,           setFilter]           = useState('all')
   const [expandedComments, setExpandedComments] = useState({})
   const [commentInputs,    setCommentInputs]    = useState({})
@@ -270,6 +356,15 @@ function CommunityTab({ state, update, showToast }) {
   const isLiked = (postId) => likedPosts.includes(postId)
 
   const handleLike = (postId) => {
+    if (!userRegion) {
+      showToast('지역 미설정', '투표하려면 먼저 거주지역을 설정해야 합니다')
+      return
+    }
+    const post = state.posts.find(p => p.id === postId)
+    if (post && post.authorRegion !== userRegion) {
+      showToast('투표 불가', `내 지역(${userRegion}) 게시물에만 투표할 수 있어요`)
+      return
+    }
     const liked = isLiked(postId)
     update({
       likedPosts: liked ? likedPosts.filter(id => id !== postId) : [...likedPosts, postId],
@@ -325,8 +420,10 @@ function CommunityTab({ state, update, showToast }) {
         <button className="btn btn-primary" onClick={() => setShowCompose(true)}>+ 게시물 작성</button>
       </div>
 
+      <RegionBanner key={userRegion || 'unset'} userRegion={userRegion} onSave={onRegionSave} />
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        {[['all', '전체'], ['myregion', `내 지역 (${userRegion})`]].map(([f, lbl]) => (
+        {[['all', '전체'], ['myregion', userRegion ? `내 지역 (${userRegion})` : '내 지역 (미설정)']].map(([f, lbl]) => (
           <button key={f} className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter(f)}>{lbl}</button>
         ))}
       </div>
@@ -587,11 +684,16 @@ export default function GuardianDash({ showToast, onLogout }) {
   useEffect(() => {
     async function loadData() {
       try {
-        const [petsRes, recordsRes, consentsRes] = await Promise.allSettled([
+        const [petsRes, recordsRes, consentsRes, meRes] = await Promise.allSettled([
           apiFetch('/pets'),
           apiFetch('/records?page=0&size=20'),
           apiFetch('/consents?page=0&size=20'),
+          apiFetch('/users/me'),
         ])
+
+        if (meRes.status === 'fulfilled' && meRes.value?.region) {
+          update({ userRegion: meRes.value.region })
+        }
 
         if (petsRes.status === 'fulfilled') {
           const apiPets = Array.isArray(petsRes.value) ? petsRes.value : []
@@ -681,6 +783,16 @@ export default function GuardianDash({ showToast, onLogout }) {
       }
     } catch {
       // API failure: local state already updated, no rollback needed for demo
+    }
+  }
+
+  const handleRegionSave = async (region) => {
+    update({ userRegion: region })
+    showToast('지역 설정 완료', `거주지역이 ${region}(으)로 설정되었습니다`)
+    try {
+      await apiFetch('/users/me', { method: 'PATCH', body: { region } })
+    } catch {
+      // API 실패 시 로컬 상태는 이미 업데이트됨
     }
   }
 
@@ -859,7 +971,7 @@ export default function GuardianDash({ showToast, onLogout }) {
         )}
 
         {/* ── 커뮤니티 ── */}
-        {tab === 'community' && <CommunityTab state={state} update={update} showToast={showToast} />}
+        {tab === 'community' && <CommunityTab state={state} update={update} showToast={showToast} onRegionSave={handleRegionSave} />}
 
         {/* ── 지역 랭킹 ── */}
         {tab === 'ranking' && <RankingTab state={state} />}
