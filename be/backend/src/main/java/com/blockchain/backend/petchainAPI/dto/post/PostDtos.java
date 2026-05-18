@@ -29,6 +29,10 @@ public class PostDtos {
 
         @Size(max = 50, message = "지역은 50자 이내여야 합니다.")
         private String authorRegion;
+
+        // 인라인 이미지(base64 data URL). 선택 항목 — 약 5MB(base64 기준) 상한.
+        @Size(max = 5_000_000, message = "이미지 용량이 너무 큽니다. 더 작은 이미지를 사용해주세요.")
+        private String imageData;
     }
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor

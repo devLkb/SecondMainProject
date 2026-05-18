@@ -60,6 +60,18 @@ public class PostService implements PostApiPort {
         post.setPetBreed(request.getPetBreed());
 
         Post saved = postRepository.save(post);
+
+        // 인라인 이미지(base64)가 있으면 post_images에 함께 저장
+        List<String> imageKeys = List.of();
+        if (request.getImageData() != null && !request.getImageData().isBlank()) {
+            PostImage image = new PostImage();
+            image.setPost(saved);
+            image.setImageData(request.getImageData());
+            image.setDisplayOrder(0);
+            PostImage savedImage = postImageRepository.save(image);
+            imageKeys = List.of(imageRef(savedImage));
+        }
+
         return PostDtos.PostResponse.builder()
                 .id(saved.getId())
                 .authorName(resolveAuthorName(user))
@@ -67,7 +79,7 @@ public class PostService implements PostApiPort {
                 .petName(saved.getPetName())
                 .petBreed(saved.getPetBreed())
                 .content(saved.getContent())
-                .imageKeys(List.of())
+                .imageKeys(imageKeys)
                 .likeCount(0)
                 .liked(false)
                 .commentCount(0)
@@ -128,7 +140,7 @@ public class PostService implements PostApiPort {
                 .petName(post.getPetName())
                 .petBreed(post.getPetBreed())
                 .content(post.getContent())
-                .imageKeys(images.stream().map(PostImage::getS3Key).toList())
+                .imageKeys(images.stream().map(PostService::imageRef).toList())
                 .likeCount(likeCount)
                 .liked(liked)
                 .comments(comments)
@@ -266,6 +278,12 @@ public class PostService implements PostApiPort {
         try { return Long.parseLong(actor.actorId()); } catch (NumberFormatException e) { return null; }
     }
 
+    // 표시용 이미지 참조 — 인라인 base64가 있으면 그것을, 없으면 S3 key를 반환
+    private static String imageRef(PostImage img) {
+        return (img.getImageData() != null && !img.getImageData().isBlank())
+                ? img.getImageData() : img.getS3Key();
+    }
+
     private Post findActivePost(Long postId) {
         return postRepository.findById(postId)
                 .filter(p -> !p.getIsDeleted())
@@ -319,7 +337,7 @@ public class PostService implements PostApiPort {
                 .petName(post.getPetName())
                 .petBreed(post.getPetBreed())
                 .content(post.getContent())
-                .imageKeys(images.stream().map(PostImage::getS3Key).toList())
+                .imageKeys(images.stream().map(PostService::imageRef).toList())
                 .likeCount(likeCount)
                 .liked(liked)
                 .commentCount(commentCount)

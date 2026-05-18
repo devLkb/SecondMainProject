@@ -1,6 +1,7 @@
 package com.blockchain.backend.petchainAPI.dto.record;
 
 import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -18,16 +19,19 @@ public final class RecordDtos {
     private RecordDtos() {
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = false)
+    // 프론트엔드는 metadata 파트로 { petId, diseases, treatments, cost, date, memo } 를 보낸다.
+    // @JsonAlias 로 그 필드명을 그대로 받고, hospitalId/guardianId 는 생략 가능(서버에서 도출).
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record CreateRecordRequest(
-            @NotBlank String hospitalId,
-            @NotBlank String guardianId,
+            String hospitalId,
+            String guardianId,
             @NotBlank String petId,
             String insurerId,
-            @NotNull @PastOrPresent LocalDate treatmentDate,
-            BigDecimal treatmentCost,
-            List<@NotBlank String> treatmentCodes,
-            List<@NotBlank String> diagnosisCodes,
+            @JsonAlias("date") @NotNull @PastOrPresent LocalDate treatmentDate,
+            @JsonAlias("cost") BigDecimal treatmentCost,
+            @JsonAlias("treatments") List<@NotBlank String> treatmentCodes,
+            @JsonAlias("diseases") List<@NotBlank String> diagnosisCodes,
+            String memo,
             Map<String, Object> metadata
     ) {
     }

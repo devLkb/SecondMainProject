@@ -475,6 +475,67 @@ function RegionBanner({ userRegion, onSave }) {
   )
 }
 
+/* ── CommunityTab API 매퍼 ── */
+// 업로드 전 이미지 리사이즈/압축 — base64 저장 부담을 줄인다 (최대 1024px, JPEG 품질 0.7)
+function compressImage(file, maxSize = 1024, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const img = new Image()
+      img.onload = () => {
+        let { width, height } = img
+        if (width > maxSize || height > maxSize) {
+          const r = Math.min(maxSize / width, maxSize / height)
+          width = Math.round(width * r); height = Math.round(height * r)
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.onerror = reject
+      img.src = e.target.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+// 서버 응답(PostSummary/PostResponse) → 프론트 게시물 모델
+function mapServerPost(p) {
+  return {
+    id: p.id,
+    authorName: p.authorName || '익명',
+    authorRegion: p.authorRegion || '',
+    petName: p.petName || '',
+    petBreed: p.petBreed || '',
+    content: p.content || '',
+    imageUrl: (Array.isArray(p.imageKeys) && p.imageKeys[0]) || null,
+    likes: [],                       // 목업 호환용(서버 게시물은 likeCount 사용)
+    likeCount: p.likeCount || 0,
+    liked: !!p.liked,
+    comments: [],
+    commentCount: p.commentCount || 0,
+    commentsLoaded: false,           // 댓글 펼칠 때 상세 조회로 채움
+    createdAt: (p.createdAt || '').slice(0, 10).replaceAll('-', '.'),
+    votes: {}, myVoted: false,
+  }
+}
+// 서버 CommentResponse → 프론트 댓글 모델
+function mapServerComment(c) {
+  return {
+    id: c.id,
+    authorName: c.authorName || '익명',
+    authorRegion: '',
+    content: c.content || '',
+    likes: 0,
+    replies: Array.isArray(c.replies)
+      ? c.replies.map(r => ({ id: r.id, authorName: r.authorName || '익명', content: r.content || '', likes: 0 }))
+      : [],
+  }
+}
+// 숫자 id = 서버 게시물/댓글, 'post-xxx' 등 문자열 = 목업
+const isServerId = id => typeof id === 'number' || /^\d+$/.test(String(id))
+
 /* ── CommunityTab ── */
 function CommunityTab({ state, update, showToast, onRegionSave }) {
   const [filter,           setFilter]           = useState('all')
@@ -484,33 +545,101 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
   const [replyInputs,      setReplyInputs]      = useState({})
   const [showCompose,      setShowCompose]      = useState(false)
   const [newPost,          setNewPost]          = useState({ content:'', petId:'', imagePreview:null })
+  const [submitting,       setSubmitting]       = useState(false)
   const fileRef = useRef()
   const userRegion    = state.userRegion
   const likedPosts    = state.likedPosts || []
   const filteredPosts = filter==='all' ? state.posts : state.posts.filter(p=>p.authorRegion===userRegion)
   const isLiked = id => likedPosts.includes(id)
-  const handleLike = postId => {
+
+  // 커뮤니티 탭 진입 시 서버 게시물 로드 (실패/빈 목록이면 목업 유지)
+  useEffect(() => {
+    let alive = true
+    apiFetch('/posts?page=0&size=20')
+      .then(res => {
+        const list = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : [])
+        if (alive && list.length > 0) update({ posts: list.map(mapServerPost) })
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLike = async postId => {
     if (!userRegion) { showToast('지역 미설정','투표하려면 먼저 거주지역을 설정해야 합니다'); return }
     const post = state.posts.find(p=>p.id===postId)
     if (post && post.authorRegion!==userRegion) { showToast('투표 불가',`내 지역(${userRegion}) 게시물에만 투표할 수 있어요`); return }
+    if (isServerId(postId)) {
+      try {
+        const res = await apiFetch(`/posts/${postId}/likes`,{method:'POST'})
+        update({
+          likedPosts: res.liked ? [...likedPosts.filter(id=>id!==postId),postId] : likedPosts.filter(id=>id!==postId),
+          posts: state.posts.map(p=>p.id===postId?{...p,liked:res.liked,likeCount:res.likeCount}:p),
+        })
+      } catch (e) { showToast('추천 실패', e?.message||'추천 처리에 실패했습니다') }
+      return
+    }
     const liked = isLiked(postId)
     update({ likedPosts:liked?likedPosts.filter(id=>id!==postId):[...likedPosts,postId], posts:state.posts.map(p=>p.id===postId?{...p,likes:liked?p.likes.slice(0,-1):[...p.likes,userRegion]}:p) })
   }
-  const handleAddComment = postId => {
+  // 댓글 영역 토글 — 펼칠 때 서버 게시물이면 상세 조회로 댓글 트리 로드
+  const toggleCommentsView = async postId => {
+    const willExpand = !expandedComments[postId]
+    setExpandedComments(prev=>({...prev,[postId]:willExpand}))
+    if (!willExpand) return
+    const post = state.posts.find(p=>p.id===postId)
+    if (!post || post.commentsLoaded || !isServerId(postId)) return
+    try {
+      const detail = await apiFetch(`/posts/${postId}`)
+      const comments = Array.isArray(detail?.comments) ? detail.comments.map(mapServerComment) : []
+      update({ posts:state.posts.map(p=>p.id===postId?{...p,comments,commentsLoaded:true,commentCount:comments.length}:p) })
+    } catch { /* 조회 실패 시 기존 상태 유지 */ }
+  }
+  const handleAddComment = async postId => {
     const content=(commentInputs[postId]||'').trim(); if(!content) return
+    if (isServerId(postId)) {
+      try {
+        const c = await apiFetch(`/posts/${postId}/comments`,{method:'POST',body:{content}})
+        update({ posts:state.posts.map(p=>p.id===postId?{...p,comments:[...p.comments,mapServerComment(c)],commentCount:(p.commentCount??p.comments.length)+1}:p) })
+        setCommentInputs(prev=>({...prev,[postId]:''}))
+      } catch (e) { showToast('댓글 실패', e?.message||'댓글 등록에 실패했습니다') }
+      return
+    }
     update({ posts:state.posts.map(p=>p.id===postId?{...p,comments:[...p.comments,{id:`cmt-${Date.now()}`,authorName:'홍길동',authorRegion:userRegion,content,likes:0,replies:[]}]}:p) })
     setCommentInputs(prev=>({...prev,[postId]:''}))
   }
-  const handleAddReply = (postId,cmtId) => {
+  const handleAddReply = async (postId,cmtId) => {
     const content=(replyInputs[cmtId]||'').trim(); if(!content) return
+    if (isServerId(postId) && isServerId(cmtId)) {
+      try {
+        const r = await apiFetch(`/posts/${postId}/comments`,{method:'POST',body:{content,parentCommentId:cmtId}})
+        update({ posts:state.posts.map(p=>p.id===postId?{...p,comments:p.comments.map(c=>c.id===cmtId?{...c,replies:[...c.replies,{id:r.id,authorName:r.authorName||'익명',content:r.content||content,likes:0}]}:c)}:p) })
+        setReplyInputs(prev=>({...prev,[cmtId]:''})); setReplyOpen(prev=>({...prev,[cmtId]:false}))
+      } catch (e) { showToast('대댓글 실패', e?.message||'대댓글 등록에 실패했습니다') }
+      return
+    }
     update({ posts:state.posts.map(p=>p.id===postId?{...p,comments:p.comments.map(c=>c.id===cmtId?{...c,replies:[...c.replies,{id:`rep-${Date.now()}`,authorName:'홍길동',content,likes:0}]}:c)}:p) })
     setReplyInputs(prev=>({...prev,[cmtId]:''})); setReplyOpen(prev=>({...prev,[cmtId]:false}))
   }
-  const handleSubmitPost = () => {
-    if (!newPost.content.trim()) return
+  const handleSubmitPost = async () => {
+    if (!newPost.content.trim() || submitting) return
     const pet=state.pets.find(p=>p.petId===newPost.petId)||state.pets[0]
-    update({ posts:[{id:`post-${Date.now()}`,authorName:'홍길동',authorRegion:userRegion,petName:pet?.name||'',petBreed:pet?.breed||'',content:newPost.content,imageUrl:newPost.imagePreview,likes:[],comments:[],createdAt:new Date().toLocaleDateString('ko-KR').slice(0,10).replace(/-/g,'.'),votes:{},myVoted:false},...state.posts] })
-    setNewPost({content:'',petId:'',imagePreview:null}); setShowCompose(false); showToast('게시 완료','게시물이 등록되었습니다')
+    setSubmitting(true)
+    try {
+      const created = await apiFetch('/posts',{method:'POST',body:{
+        content:newPost.content.trim(),
+        petName:pet?.name||undefined,
+        petBreed:pet?.breed||undefined,
+        authorRegion:userRegion||undefined,
+        imageData:newPost.imagePreview||undefined,
+      }})
+      update({ posts:[mapServerPost(created),...state.posts] })
+      setNewPost({content:'',petId:'',imagePreview:null}); setShowCompose(false)
+      showToast('게시 완료','게시물이 등록되었습니다')
+    } catch (e) {
+      showToast('게시 실패', e?.message||'게시물 등록에 실패했습니다 (로그인이 필요할 수 있어요)')
+    } finally {
+      setSubmitting(false)
+    }
   }
   return (
     <div className="fade-in">
@@ -527,7 +656,7 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
         {filteredPosts.length===0 && <div className="card" style={{ textAlign:'center', padding:'48px 24px', color:'var(--muted)' }}><div style={{ fontSize:32, marginBottom:10 }}>🐾</div><div style={{ fontWeight:500, fontSize:16 }}>게시물이 없습니다</div></div>}
         {filteredPosts.map(post => {
-          const liked=isLiked(post.id); const cmtExpanded=expandedComments[post.id]
+          const liked=post.liked ?? isLiked(post.id); const cmtExpanded=expandedComments[post.id]
           return (
             <div key={post.id} className="card" style={{ padding:'20px 22px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
@@ -544,8 +673,8 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
               <div style={{ fontSize:15, color:'var(--text-2)', lineHeight:1.75, marginBottom:12 }}>{post.content}</div>
               {post.imageUrl && <div style={{ marginBottom:12, borderRadius:10, overflow:'hidden', aspectRatio:'16/9' }}><img src={post.imageUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /></div>}
               <div style={{ display:'flex', gap:4, paddingTop:10, borderTop:'1px solid var(--border)' }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => handleLike(post.id)} style={{ color:liked?'#e11d48':'var(--muted)', fontWeight:liked?600:400 }}>{liked?'❤️':'🤍'} {post.likes.length}</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setExpandedComments(prev=>({...prev,[post.id]:!cmtExpanded}))}>💬 {post.comments.length}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => handleLike(post.id)} style={{ color:liked?'#e11d48':'var(--muted)', fontWeight:liked?600:400 }}>{liked?'❤️':'🤍'} {post.likeCount ?? post.likes.length}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => toggleCommentsView(post.id)}>💬 {post.commentCount ?? post.comments.length}</button>
               </div>
               {cmtExpanded && (
                 <div style={{ marginTop:14, paddingTop:14, borderTop:'1px solid var(--border)' }}>
@@ -599,9 +728,9 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
           <label className="fl">내용</label>
           <textarea className="fi" rows={5} placeholder="오늘 있었던 이야기를 적어보세요..." value={newPost.content} onChange={e=>setNewPost(p=>({...p,content:e.target.value}))} style={{ resize:'vertical', fontFamily:'inherit' }} />
           <label className="fl">이미지 첨부</label>
-          <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>setNewPost(p=>({...p,imagePreview:ev.target.result})); r.readAsDataURL(f) }} />
+          <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={async e=>{ const f=e.target.files[0]; if(!f) return; try { const data=await compressImage(f); setNewPost(p=>({...p,imagePreview:data})) } catch { showToast('이미지 오류','이미지를 불러오지 못했습니다') } }} />
           {newPost.imagePreview ? <img src={newPost.imagePreview} alt="" style={{ width:'100%', borderRadius:10, marginBottom:14, aspectRatio:'16/9', objectFit:'cover' }} /> : <div className="upload-zone" style={{ marginBottom:14 }} onClick={() => fileRef.current.click()}>📎 이미지 첨부 (선택)</div>}
-          <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center', padding:13 }} onClick={handleSubmitPost}>게시하기</button>
+          <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center', padding:13 }} onClick={handleSubmitPost} disabled={submitting}>{submitting?'게시 중...':'게시하기'}</button>
         </Overlay>
       )}
     </div>

@@ -63,11 +63,21 @@ public class RecordService implements RecordApiPort {
             throw ApiException.validation("recordFile은 필수입니다.", java.util.Map.of("recordFile", "required"));
         }
 
-        Hospital hospital = support.hospitalByExternalId(request.hospitalId());
+        // 펫: id 또는 펫번호로 전역 조회
+        Pet pet = resolvePet(request.petId());
+        // 병원: 요청에 있으면 그것, 없으면 인증된 병원 계정에서 도출
+        Hospital hospital = hasText(request.hospitalId())
+                ? support.hospitalByExternalId(request.hospitalId())
+                : support.hospitalByActor(actor);
         support.requireHospitalScope(actor, hospital);
-        Guardian guardian = support.guardianByExternalId(request.guardianId());
-        List<Pet> guardianPets = petRepository.findByGuardian_Id(guardian.getId());
-        Pet pet = support.petByExternalId(guardianPets, request.petId());
+        // 보호자: 요청에 있으면 그것, 없으면 펫의 보호자
+        Guardian guardian = hasText(request.guardianId())
+                ? support.guardianByExternalId(request.guardianId())
+                : pet.getGuardian();
+        if (!Objects.equals(pet.getGuardian().getId(), guardian.getId())) {
+            throw ApiException.validation("반려동물과 보호자가 일치하지 않습니다.",
+                    java.util.Map.of("petId", "guardian_mismatch"));
+        }
 
         MedicalRecord record = new MedicalRecord();
         record.setHospital(hospital);
@@ -76,7 +86,8 @@ public class RecordService implements RecordApiPort {
         record.setTotalCost(request.treatmentCost() == null ? 0 : request.treatmentCost().intValue());
         record.setFindingsEncrypted(String.join(",", safeList(request.diagnosisCodes())));
         record.setPrescriptionEncrypted(String.join(",", safeList(request.treatmentCodes())));
-        record.setTestResultsEncrypted(request.metadata() == null ? null : request.metadata().toString());
+        record.setTestResultsEncrypted(hasText(request.memo()) ? request.memo()
+                : (request.metadata() == null ? null : request.metadata().toString()));
         record.setDetailDataHash(sha256(fileBytes(recordFile)));
         MedicalRecord saved = medicalRecordRepository.save(record);
 
@@ -196,6 +207,19 @@ public class RecordService implements RecordApiPort {
 
     private static List<String> safeList(List<String> values) {
         return values == null ? List.of() : values.stream().filter(v -> v != null && !v.isBlank()).toList();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    // 펫을 DB id 또는 펫번호(pet_number) 어느 쪽으로든 조회한다.
+    private Pet resolvePet(String petId) {
+        return support.parseNumericId(petId)
+                .flatMap(petRepository::findById)
+                .or(() -> petRepository.findByPetNumber(petId))
+                .orElseThrow(() -> ApiException.validation("반려동물을 찾을 수 없습니다.",
+                        java.util.Map.of("petId", "not_found")));
     }
 
     private static Instant toInstant(java.time.LocalDateTime value) {

@@ -38,7 +38,11 @@ public class SubmissionService implements SubmissionApiPort {
     @Transactional
     public SubmissionDtos.CreateSubmissionResponse createSubmission(ApiActor actor, SubmissionDtos.CreateSubmissionRequest request) {
         MedicalRecord record = support.recordByRecordId(request.recordId());
-        InsuranceCompany insurer = support.insurerByExternalId(request.insurerId());
+        // 보험사는 요청 body가 아니라 인증된 액터에서 도출한다(클라이언트가 보낸 식별자를 신뢰하지 않음).
+        Long actorUserId = support.parseActorUserId(actor);
+        InsuranceCompany insurer = (actorUserId != null)
+                ? support.insurerByActor(actor)
+                : support.insurerByExternalId(request.insurerId());
         support.requireInsurerScope(actor, insurer);
         ClaimPackage claim = claimPackageRepository
                 .findByMedicalRecord_RecordIdAndInsuranceCompany_Id(record.getRecordId(), insurer.getId())

@@ -23,8 +23,13 @@ public class PostImage {
     @JoinColumn(name = "post_id", nullable = false)
     private Post post;
 
-    @Column(name = "s3_key", nullable = false, length = 500)
+    // S3 사용 시 객체 키. 인라인 base64 저장 시에는 null.
+    @Column(name = "s3_key", length = 500)
     private String s3Key;
+
+    // 인라인 이미지(base64 data URL) — S3 미사용 환경에서 이미지 본문을 DB에 직접 보관.
+    @Column(name = "image_data", columnDefinition = "LONGTEXT")
+    private String imageData;
 
     @Column(name = "original_filename", length = 255)
     private String originalFilename;

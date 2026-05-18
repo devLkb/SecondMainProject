@@ -31,7 +31,11 @@ public class ConsentService implements ConsentApiPort {
     @Transactional
     public ConsentDtos.ConsentResponse createConsent(ApiActor actor, ConsentDtos.CreateConsentRequest request) {
         MedicalRecord record = support.recordByRecordId(request.recordId());
-        Guardian guardian = support.guardianByExternalId(request.guardianId());
+        // 보호자는 요청 body가 아니라 인증된 액터에서 도출한다(클라이언트가 보낸 식별자를 신뢰하지 않음).
+        Long actorUserId = support.parseActorUserId(actor);
+        Guardian guardian = (actorUserId != null)
+                ? support.guardianByActor(actor)
+                : support.guardianByExternalId(request.guardianId());
         InsuranceCompany insurer = support.insurerByExternalId(request.insurerId());
         support.requireGuardianScope(actor, guardian);
         if (!Objects.equals(record.getPet().getGuardian().getId(), guardian.getId())) {

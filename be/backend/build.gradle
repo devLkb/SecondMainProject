@@ -13,6 +13,12 @@ java {
 	}
 }
 
+// Spring MVC가 @PathVariable/@RequestParam의 파라미터 이름을 리플렉션으로 읽으려면
+// 바이트코드에 파라미터 이름이 남아야 한다. -parameters 플래그가 이를 보장한다.
+tasks.withType(JavaCompile).configureEach {
+	options.compilerArgs.add('-parameters')
+}
+
 repositories {
 	mavenCentral()
 }

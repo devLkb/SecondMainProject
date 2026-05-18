@@ -114,6 +114,34 @@ class ApiDomainSupport {
                 .orElseThrow(() -> new ApiException(ApiErrorCode.INSURER_INVALID, "보험사를 찾을 수 없습니다."));
     }
 
+    // 인증된 액터(JWT)로부터 본인 소속 엔티티를 도출한다. 요청 body의 식별자를 신뢰하지 않는다.
+    Hospital hospitalByActor(ApiActor actor) {
+        Long userId = parseActorUserId(actor);
+        if (userId == null) {
+            throw new ApiException(ApiErrorCode.HOSPITAL_INVALID, "병원 인증 정보가 필요합니다.");
+        }
+        return hospitalRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new ApiException(ApiErrorCode.HOSPITAL_INVALID, "병원을 찾을 수 없습니다."));
+    }
+
+    Guardian guardianByActor(ApiActor actor) {
+        Long userId = parseActorUserId(actor);
+        if (userId == null) {
+            throw new ApiException(ApiErrorCode.RESOURCE_NOT_FOUND, "보호자 인증 정보가 필요합니다.");
+        }
+        return guardianRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new ApiException(ApiErrorCode.RESOURCE_NOT_FOUND, "보호자를 찾을 수 없습니다."));
+    }
+
+    InsuranceCompany insurerByActor(ApiActor actor) {
+        Long userId = parseActorUserId(actor);
+        if (userId == null) {
+            throw new ApiException(ApiErrorCode.INSURER_INVALID, "보험사 인증 정보가 필요합니다.");
+        }
+        return insuranceCompanyRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new ApiException(ApiErrorCode.INSURER_INVALID, "보험사를 찾을 수 없습니다."));
+    }
+
     Pet petByExternalId(List<Pet> candidates, String petId) {
         return parseNumericId(petId)
                 .flatMap(id -> candidates.stream().filter(p -> p.getId().equals(id)).findFirst())

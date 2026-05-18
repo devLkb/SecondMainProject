@@ -31,7 +31,7 @@ public class OAuthController {
 
     // 제공자 인가 페이지로 리다이렉트
     @GetMapping("/{provider}")
-    public void authorize(@PathVariable String provider,
+    public void authorize(@PathVariable("provider") String provider,
                           HttpServletResponse response) throws IOException {
         String url = oAuthService.buildAuthorizationUrl(provider);
         response.sendRedirect(url);
@@ -40,10 +40,10 @@ public class OAuthController {
     // 인가 코드 수신 → 사용자 조회/생성 → 프론트로 리다이렉트
     // code는 동의 거부 시 누락되므로 required=false. error 파라미터를 먼저 확인한다.
     @GetMapping("/{provider}/callback")
-    public void callback(@PathVariable String provider,
-                         @RequestParam(required = false) String code,
-                         @RequestParam(required = false, defaultValue = "") String state,
-                         @RequestParam(required = false) String error,
+    public void callback(@PathVariable("provider") String provider,
+                         @RequestParam(name = "code", required = false) String code,
+                         @RequestParam(name = "state", required = false, defaultValue = "") String state,
+                         @RequestParam(name = "error", required = false) String error,
                          HttpServletResponse response) throws IOException {
         if (error != null && !error.isBlank()) {
             log.warn("OAuth 동의 거부/오류 [{}]: {}", provider, error);
