@@ -7,6 +7,7 @@ import com.blockchain.backend.petchainDB.repository.GuardianRepository;
 import com.blockchain.backend.petchainDB.repository.PetRepository;
 import com.blockchain.backend.petchainLOGIN.dto.request.PetRegisterRequest;
 import com.blockchain.backend.petchainLOGIN.dto.response.PetResponse;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,16 @@ public class PetService {
 
     private final PetRepository petRepository;
     private final GuardianRepository guardianRepository;
+
+    // 로그인한 보호자 본인이 등록한 동물 목록 조회
+    @Transactional(readOnly = true)
+    public List<PetResponse> getMyPets(Long userId) {
+        Guardian guardian = guardianRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new IllegalArgumentException("보호자 정보를 찾을 수 없습니다."));
+        return petRepository.findByGuardian_Id(guardian.getId()).stream()
+                .map(PetResponse::from)
+                .toList();
+    }
 
     @Transactional
     public PetResponse registerPet(Long userId, PetRegisterRequest req) {

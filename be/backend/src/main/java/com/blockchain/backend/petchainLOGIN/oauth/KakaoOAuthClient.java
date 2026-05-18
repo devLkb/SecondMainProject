@@ -43,6 +43,9 @@ public class KakaoOAuthClient {
 
         Map<String, Object> response = restTemplate.exchange(
                 TOKEN_URL, HttpMethod.POST, new HttpEntity<>(body, headers), MAP_TYPE).getBody();
+        if (response == null || response.get("access_token") == null) {
+            throw new IllegalStateException("카카오 액세스 토큰 발급에 실패했습니다. 다시 시도해주세요.");
+        }
         return (String) response.get("access_token");
     }
 
@@ -53,14 +56,21 @@ public class KakaoOAuthClient {
 
         Map<String, Object> body = restTemplate.exchange(
                 USER_INFO_URL, HttpMethod.GET, new HttpEntity<>(headers), MAP_TYPE).getBody();
+        if (body == null || body.get("id") == null) {
+            throw new IllegalStateException("카카오 사용자 정보를 가져오지 못했습니다.");
+        }
 
         String providerId = String.valueOf(body.get("id"));
         Map<String, Object> kakaoAccount = (Map<String, Object>) body.get("kakao_account");
 
         String email = null;
         String name  = "카카오 사용자";
+        boolean emailVerified = false;
         if (kakaoAccount != null) {
             email = (String) kakaoAccount.get("email");
+            // 카카오 이메일은 미인증/유효하지 않은 경우가 있으므로 두 플래그를 모두 확인한다.
+            emailVerified = Boolean.TRUE.equals(kakaoAccount.get("is_email_valid"))
+                    && Boolean.TRUE.equals(kakaoAccount.get("is_email_verified"));
             Map<String, Object> profile = (Map<String, Object>) kakaoAccount.get("profile");
             if (profile != null && profile.get("nickname") != null) {
                 name = (String) profile.get("nickname");
@@ -71,6 +81,7 @@ public class KakaoOAuthClient {
                 .provider("kakao")
                 .providerId(providerId)
                 .email(email)
+                .emailVerified(emailVerified)
                 .name(name)
                 .build();
     }

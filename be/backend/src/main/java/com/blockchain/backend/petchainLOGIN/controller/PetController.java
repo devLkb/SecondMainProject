@@ -5,9 +5,11 @@ import com.blockchain.backend.petchainLOGIN.dto.request.PetRegisterRequest;
 import com.blockchain.backend.petchainLOGIN.dto.response.PetResponse;
 import com.blockchain.backend.petchainLOGIN.service.PetService;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +21,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class PetController {
 
     private final PetService petService;
+
+    // 로그인한 보호자 본인의 동물 목록 조회
+    @GetMapping
+    public ResponseEntity<List<PetResponse>> getMyPets(ApiActor actor) {
+        return ResponseEntity.ok(petService.getMyPets(requireUserId(actor)));
+    }
 
     @PostMapping
     public ResponseEntity<PetResponse> registerPet(

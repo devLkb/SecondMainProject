@@ -40,6 +40,9 @@ public class NaverOAuthClient {
 
         Map<String, Object> response = restTemplate.exchange(
                 TOKEN_URL, HttpMethod.POST, new HttpEntity<>(body, headers), MAP_TYPE).getBody();
+        if (response == null || response.get("access_token") == null) {
+            throw new IllegalStateException("네이버 액세스 토큰 발급에 실패했습니다. 다시 시도해주세요.");
+        }
         return (String) response.get("access_token");
     }
 
@@ -51,12 +54,18 @@ public class NaverOAuthClient {
         Map<String, Object> body = restTemplate.exchange(
                 USER_INFO_URL, HttpMethod.GET, new HttpEntity<>(headers), MAP_TYPE).getBody();
 
-        Map<String, Object> profile = (Map<String, Object>) body.get("response");
+        Map<String, Object> profile = body == null ? null : (Map<String, Object>) body.get("response");
+        if (profile == null || profile.get("id") == null) {
+            throw new IllegalStateException("네이버 사용자 정보를 가져오지 못했습니다.");
+        }
+        String email = (String) profile.get("email");
 
         return OAuthUserInfo.builder()
                 .provider("naver")
                 .providerId(String.valueOf(profile.get("id")))
-                .email((String) profile.get("email"))
+                .email(email)
+                // 네이버가 반환하는 이메일은 사용자의 검증된 네이버 계정 이메일이다.
+                .emailVerified(email != null && !email.isBlank())
                 .name((String) profile.get("name"))
                 .build();
     }

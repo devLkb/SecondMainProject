@@ -40,6 +40,9 @@ public class GoogleOAuthClient {
 
         Map<String, Object> response = restTemplate.exchange(
                 TOKEN_URL, HttpMethod.POST, new HttpEntity<>(body, headers), MAP_TYPE).getBody();
+        if (response == null || response.get("access_token") == null) {
+            throw new IllegalStateException("구글 액세스 토큰 발급에 실패했습니다. 다시 시도해주세요.");
+        }
         return (String) response.get("access_token");
     }
 
@@ -49,11 +52,16 @@ public class GoogleOAuthClient {
 
         Map<String, Object> body = restTemplate.exchange(
                 USER_INFO_URL, HttpMethod.GET, new HttpEntity<>(headers), MAP_TYPE).getBody();
+        if (body == null || body.get("id") == null) {
+            throw new IllegalStateException("구글 사용자 정보를 가져오지 못했습니다.");
+        }
 
         return OAuthUserInfo.builder()
                 .provider("google")
                 .providerId(String.valueOf(body.get("id")))
                 .email((String) body.get("email"))
+                // Google userinfo v2는 검증된 이메일에 verified_email=true를 반환한다.
+                .emailVerified(Boolean.TRUE.equals(body.get("verified_email")))
                 .name((String) body.get("name"))
                 .build();
     }

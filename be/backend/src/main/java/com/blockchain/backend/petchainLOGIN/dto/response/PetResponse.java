@@ -57,4 +57,9 @@ public class PetResponse {
     public static PetResponse from(Pet pet, String message) {
         return new PetResponse(pet, message);
     }
+
+    // 목록 조회용 — 안내 메시지 없이 변환한다.
+    public static PetResponse from(Pet pet) {
+        return new PetResponse(pet, null);
+    }
 }

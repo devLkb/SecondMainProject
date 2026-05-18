@@ -81,8 +81,9 @@ public class OAuthService {
             return loginExisting(byProvider.get());
         }
 
-        // 2단계: 같은 이메일로 가입된 계정이 있으면 OAuth 연동 후 로그인
-        if (info.getEmail() != null && !info.getEmail().isBlank()) {
+        // 2단계: 같은 이메일로 가입된 계정이 있으면 OAuth 연동 후 로그인.
+        //         계정 탈취를 막기 위해 제공자가 검증한 이메일일 때만 자동 연동한다.
+        if (info.getEmail() != null && !info.getEmail().isBlank() && info.isEmailVerified()) {
             Optional<User> byEmail = userRepository.findByLoginId(info.getEmail());
             if (byEmail.isPresent()) {
                 User user = byEmail.get();
@@ -101,6 +102,7 @@ public class OAuthService {
     }
 
     private AuthResponse loginExisting(User user) {
+        assertAccountActive(user);
         user.setLastLoginAt(LocalDateTime.now());
         String memberNumber = guardianRepository.findByUser_Id(user.getId())
                 .map(Guardian::getMemberNumber)
@@ -109,10 +111,14 @@ public class OAuthService {
     }
 
     private AuthResponse createGuardian(OAuthUserInfo info) {
-        // loginId: 이메일 우선, 없으면 "provider_providerId"
-        String loginId = (info.getEmail() != null && !info.getEmail().isBlank())
+        // loginId: 이메일 우선. 단, 이메일이 없거나 이미 다른 계정이 선점한 경우
+        //          (예: 미검증 이메일이거나 병원/보험사 계정이 같은 이메일을 쓰는 경우)
+        //          유니크 제약 위반을 피하기 위해 "provider_providerId"로 대체한다.
+        String fallbackId = info.getProvider() + "_" + info.getProviderId();
+        String loginId = (info.getEmail() != null && !info.getEmail().isBlank()
+                && !userRepository.existsByLoginId(info.getEmail()))
                 ? info.getEmail()
-                : info.getProvider() + "_" + info.getProviderId();
+                : fallbackId;
 
         User user = new User();
         user.setLoginId(loginId);
@@ -136,6 +142,16 @@ public class OAuthService {
         guardianRepository.save(guardian);
 
         return issueTokens(user, memberNumber);
+    }
+
+    // 일반 로그인(AuthService.login)과 동일하게 정지/탈퇴 계정의 OAuth 로그인을 차단한다.
+    private void assertAccountActive(User user) {
+        if (AccountStatus.SUSPENDED.equals(user.getStatus())) {
+            throw new IllegalStateException("관리자 승인 대기 중이거나 정지된 계정입니다.");
+        }
+        if (AccountStatus.WITHDRAWN.equals(user.getStatus())) {
+            throw new IllegalStateException("탈퇴한 계정입니다.");
+        }
     }
 
     private AuthResponse issueTokens(User user, String memberNumber) {

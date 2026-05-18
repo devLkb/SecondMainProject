@@ -8,8 +8,11 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "users", indexes = {
-    @Index(name = "idx_users_oauth", columnList = "oauth_provider, oauth_provider_id")
+@Table(name = "users", uniqueConstraints = {
+    // 동일 OAuth 계정의 중복 가입을 DB 레벨에서 차단한다.
+    // 이메일 가입자는 두 컬럼이 모두 NULL이며, MySQL은 NULL을 서로 다른 값으로
+    // 취급하므로 이메일 가입자끼리는 이 제약에 걸리지 않는다.
+    @UniqueConstraint(name = "uq_users_oauth", columnNames = {"oauth_provider", "oauth_provider_id"})
 })
 @Getter @Setter @NoArgsConstructor
 public class User extends TimestampedEntity {
