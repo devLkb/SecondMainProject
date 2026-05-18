@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
-@RequestMapping("/api")
+@RequestMapping({"", "/api"})
 public class PointController {
     private final PointApiPort pointApiPort;
 

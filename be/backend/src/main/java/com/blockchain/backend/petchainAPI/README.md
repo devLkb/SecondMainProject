@@ -2,7 +2,7 @@
 
 `com.blockchain.backend.petchainAPI`는 반려동물 진료기록을 보험사에 제출하고, 보호자 동의와 검증 결과를 기반으로 보험 청구/포인트/감사 추적을 처리하기 위한 API 경계 계층이다.
 
-현재 패키지는 **Controller → Port → Service → DTO/Common/Error/Security** 형태로 구성되어 있다. 컨트롤러는 HTTP 요청/응답과 검증을 담당하고, `port` 인터페이스는 비즈니스 기능의 계약을 정의하며, `service` 구현체는 각 Port를 구현하는 확장 지점이다. 현 시점의 서비스 메서드는 모두 `UnsupportedOperationException("Not implemented yet")`로 남아 있어 실제 영속화/도메인 로직은 아직 연결되지 않았다.
+현재 패키지는 **Controller → Port → Service → DTO/Common/Error/Security** 형태로 구성되어 있다. 컨트롤러는 HTTP 요청/응답과 검증을 담당하고, `port` 인터페이스는 비즈니스 기능의 계약을 정의하며, `service` 구현체는 각 Port를 구현하는 확장 지점이다. 서비스 계층은 MVP 범위에서 JPA 엔티티/Repository와 연결되어 진료기록, 동의, 제출, 검증, 포인트, 관리자 기능을 처리한다. 외부 스토리지/체인코드 연동은 아직 실제 원격 호출이 아니라 로컬 메타데이터와 감사 가능한 ID 중심으로 대체되어 있다.
 
 ## 전체 레이어 구조
 
@@ -274,6 +274,6 @@ Security/Error/Common
 ## 구현 시 참고 사항
 
 - 컨트롤러는 이미 API 계약과 입력 검증의 상당 부분을 정의하고 있으므로, 서비스 구현 시 Port 인터페이스 시그니처를 기준으로 도메인/DB/블록체인 연동을 연결하면 된다.
-- 서비스는 현재 모두 스텁이므로 실제 API 호출은 `UnsupportedOperationException`으로 실패한다.
+- 서비스는 MVP 범위에서 DB 연동으로 동작하며, 외부 S3/체인코드 원격 호출은 후속 연동 지점으로 남아 있다.
 - 컨트롤러는 구체 서비스가 아닌 Port에 의존하므로, 테스트나 실제 구현에서 Port 구현체를 교체하기 쉽다.
 - 동의 철회, 패키지 접근 차단, 검증 데이터 차단, 포인트 부족 등은 `ApiErrorCode`에 이미 도메인 오류 코드가 준비되어 있다.

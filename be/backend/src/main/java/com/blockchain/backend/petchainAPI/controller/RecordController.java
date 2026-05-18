@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Validated
 @RestController
-@RequestMapping("/api")
+@RequestMapping({"", "/api"})
 public class RecordController {
     private final RecordApiPort recordApiPort;
 

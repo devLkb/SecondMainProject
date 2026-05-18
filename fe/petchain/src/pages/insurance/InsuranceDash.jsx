@@ -33,7 +33,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
         if (data && data.balance !== undefined) {
           setState(s => ({ ...s, ptBalance: data.balance }))
         }
-      } catch (_) {
+      } catch {
         // Fall back to existing mock balance
       }
     }
@@ -72,11 +72,27 @@ export default function InsuranceDash({ showToast, onLogout }) {
 
     // Sync with API (graceful degradation)
     try {
-      const submission = await apiFetch('/submissions', { method: 'POST', body: { consentId: c.consentId } })
-      if (submission && submission.id) {
-        await apiFetch(`/submissions/${submission.id}/verification`, { method: 'POST' })
+      const insurerId = localStorage.getItem('userId') || c.insurerId || '1'
+      const submission = await apiFetch('/submissions', { method: 'POST', body: { recordId: c.recordId, insurerId } })
+      const submissionId = submission?.submissionId || submission?.id
+      if (submissionId) {
+        await apiFetch(`/submissions/${submissionId}/verification`, {
+          method: 'POST',
+          body: {
+            submissionId,
+            recordId: c.recordId,
+            hospitalId: c.hospitalId || '1',
+            insurerId,
+            consentId: c.consentId || submissionId,
+            recordHash: c.recordHash || 'demo-record-hash',
+            requestedBy: insurerId,
+            requestedAt: new Date().toISOString(),
+            petId: c.petId,
+            guardianId: c.guardianId,
+          },
+        })
       }
-    } catch (_) {
+    } catch {
       // API failure: local state already updated
     }
   }

@@ -1,50 +1,45 @@
 package com.blockchain.backend.petchainAPI.controller;
 
+import com.blockchain.backend.petchainAPI.dto.common.ApiResponse;
 import com.blockchain.backend.petchainAPI.service.FileUploadService;
 import com.blockchain.backend.petchainDB.entity.MedicalRecordFile;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
+@Validated
 @RestController
-@RequestMapping("/api/records/{recordId}/files")
+@RequestMapping({"/records/{recordId}/files", "/api/records/{recordId}/files"})
 @RequiredArgsConstructor
 public class FileUploadController {
 
     private final FileUploadService fileUploadService;
 
-    // S3 업로드 완료 후 프론트에서 s3Key를 받아 DB에 메타데이터 저장
-    // 가이드 패턴: S3 Presigned URL로 프론트가 직접 업로드 → 완료 후 이 엔드포인트 호출
     @PostMapping
-    public ResponseEntity<Map<String, Object>> saveFileMeta(
+    public ApiResponse<FileMetaResponse> saveFileMeta(
             @PathVariable Long recordId,
-            @RequestBody Map<String, Object> body) {
-
-        String s3Key          = (String) body.get("s3Key");
-        String originalFilename = (String) body.get("originalFilename");
-        String mimeType       = (String) body.get("mimeType");
-        String fileType       = (String) body.getOrDefault("fileType", "other").toString();
-        Long   fileSize       = body.get("fileSize") != null
-                ? Long.parseLong(body.get("fileSize").toString()) : null;
-
+            @Validated @RequestBody SaveFileMetaRequest body,
+            HttpServletRequest request) {
         MedicalRecordFile saved = fileUploadService.saveFileMeta(
-                recordId, s3Key, originalFilename, fileSize, mimeType, fileType);
-
-        return ResponseEntity.ok(Map.of(
-                "id",               saved.getId(),
-                "s3Key",            saved.getS3Key(),
-                "originalFilename", saved.getOriginalFilename(),
-                "fileType",         saved.getFileType(),
-                "uploadedAt",       saved.getUploadedAt().toString()
-        ));
+                recordId,
+                body.s3Key(),
+                body.originalFilename(),
+                body.fileSize(),
+                body.mimeType(),
+                body.fileType() == null || body.fileType().isBlank() ? "other" : body.fileType());
+        return ApiResponse.of(toResponse(saved), request);
     }
 
     @GetMapping
-    public ResponseEntity<List<MedicalRecordFile>> getFiles(@PathVariable Long recordId) {
-        return ResponseEntity.ok(fileUploadService.getFiles(recordId));
+    public ApiResponse<List<FileMetaResponse>> getFiles(@PathVariable Long recordId, HttpServletRequest request) {
+        return ApiResponse.of(fileUploadService.getFiles(recordId).stream().map(FileUploadController::toResponse).toList(), request);
     }
 
     @DeleteMapping("/{fileId}")
@@ -52,5 +47,29 @@ public class FileUploadController {
                                            @PathVariable Long fileId) {
         fileUploadService.softDelete(fileId);
         return ResponseEntity.noContent().build();
+    }
+
+    private static FileMetaResponse toResponse(MedicalRecordFile file) {
+        return new FileMetaResponse(file.getId(), file.getS3Key(), file.getOriginalFilename(), file.getFileType(), file.getMimeType(), file.getFileSize(), file.getUploadedAt());
+    }
+
+    public record SaveFileMetaRequest(
+            @NotBlank String s3Key,
+            @Size(max = 255) String originalFilename,
+            Long fileSize,
+            @Size(max = 100) String mimeType,
+            String fileType
+    ) {
+    }
+
+    public record FileMetaResponse(
+            Long id,
+            String s3Key,
+            String originalFilename,
+            String fileType,
+            String mimeType,
+            Long fileSize,
+            LocalDateTime uploadedAt
+    ) {
     }
 }

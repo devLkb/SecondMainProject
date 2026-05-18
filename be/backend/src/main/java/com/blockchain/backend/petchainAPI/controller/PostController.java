@@ -1,8 +1,10 @@
 package com.blockchain.backend.petchainAPI.controller;
 
+import com.blockchain.backend.petchainAPI.dto.common.ApiResponse;
 import com.blockchain.backend.petchainAPI.dto.post.PostDtos;
 import com.blockchain.backend.petchainAPI.port.PostApiPort;
 import com.blockchain.backend.petchainAPI.security.ApiActor;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -13,42 +15,44 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/posts")
+@RequestMapping({"/posts", "/api/posts"})
 @RequiredArgsConstructor
 public class PostController {
 
     private final PostApiPort postApiPort;
 
     @PostMapping
-    public ResponseEntity<PostDtos.PostResponse> createPost(
+    public ResponseEntity<ApiResponse<PostDtos.PostResponse>> createPost(
             ApiActor actor,
-            @Valid @RequestBody PostDtos.CreatePostRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(postApiPort.createPost(actor, request));
+            @Valid @RequestBody PostDtos.CreatePostRequest createPostRequest,
+            HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(postApiPort.createPost(actor, createPostRequest), request));
     }
 
     @GetMapping
-    public ResponseEntity<Page<PostDtos.PostSummaryResponse>> listPosts(
+    public ApiResponse<Page<PostDtos.PostSummaryResponse>> listPosts(
             ApiActor actor,
             @RequestParam(required = false) String region,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(postApiPort.listPosts(actor, region, page, size));
+            @RequestParam(defaultValue = "10") int size,
+            HttpServletRequest request) {
+        return ApiResponse.of(postApiPort.listPosts(actor, region, page, size), request);
     }
 
-    // 지역별 인기글: 최근 30일 내 작성글 중 좋아요 상위 10개
-    // region 생략 시 전체 지역 대상. {postId} 보다 먼저 매칭되도록 리터럴 경로 사용
     @GetMapping("/popular")
-    public ResponseEntity<List<PostDtos.PostSummaryResponse>> listPopularPosts(
+    public ApiResponse<List<PostDtos.PostSummaryResponse>> listPopularPosts(
             ApiActor actor,
-            @RequestParam(required = false) String region) {
-        return ResponseEntity.ok(postApiPort.listPopularPosts(actor, region));
+            @RequestParam(required = false) String region,
+            HttpServletRequest request) {
+        return ApiResponse.of(postApiPort.listPopularPosts(actor, region), request);
     }
 
     @GetMapping("/{postId}")
-    public ResponseEntity<PostDtos.PostDetailResponse> getPost(
+    public ApiResponse<PostDtos.PostDetailResponse> getPost(
             ApiActor actor,
-            @PathVariable Long postId) {
-        return ResponseEntity.ok(postApiPort.getPost(actor, postId));
+            @PathVariable Long postId,
+            HttpServletRequest request) {
+        return ApiResponse.of(postApiPort.getPost(actor, postId), request);
     }
 
     @DeleteMapping("/{postId}")
@@ -60,18 +64,20 @@ public class PostController {
     }
 
     @PostMapping("/{postId}/likes")
-    public ResponseEntity<PostDtos.LikeResponse> toggleLike(
+    public ApiResponse<PostDtos.LikeResponse> toggleLike(
             ApiActor actor,
-            @PathVariable Long postId) {
-        return ResponseEntity.ok(postApiPort.toggleLike(actor, postId));
+            @PathVariable Long postId,
+            HttpServletRequest request) {
+        return ApiResponse.of(postApiPort.toggleLike(actor, postId), request);
     }
 
     @PostMapping("/{postId}/comments")
-    public ResponseEntity<PostDtos.CommentResponse> addComment(
+    public ResponseEntity<ApiResponse<PostDtos.CommentResponse>> addComment(
             ApiActor actor,
             @PathVariable Long postId,
-            @Valid @RequestBody PostDtos.CreateCommentRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(postApiPort.addComment(actor, postId, request));
+            @Valid @RequestBody PostDtos.CreateCommentRequest createCommentRequest,
+            HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(postApiPort.addComment(actor, postId, createCommentRequest), request));
     }
 
     @DeleteMapping("/{postId}/comments/{commentId}")
@@ -83,12 +89,12 @@ public class PostController {
         return ResponseEntity.noContent().build();
     }
 
-    // S3 업로드 완료 후 프론트에서 s3Key를 받아 DB에 메타데이터 저장
     @PostMapping("/{postId}/images")
-    public ResponseEntity<PostDtos.PostImageResponse> savePostImage(
+    public ResponseEntity<ApiResponse<PostDtos.PostImageResponse>> savePostImage(
             ApiActor actor,
             @PathVariable Long postId,
-            @Valid @RequestBody PostDtos.SaveImageRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(postApiPort.savePostImage(actor, postId, request));
+            @Valid @RequestBody PostDtos.SaveImageRequest saveImageRequest,
+            HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(postApiPort.savePostImage(actor, postId, saveImageRequest), request));
     }
 }

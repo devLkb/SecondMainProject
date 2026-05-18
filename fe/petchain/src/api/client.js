@@ -1,3 +1,14 @@
+class ApiError extends Error {
+  constructor({ message, status, errorCode, traceId, details }) {
+    super(message || `요청 실패 (${status})`)
+    this.name = 'ApiError'
+    this.status = status
+    this.errorCode = errorCode
+    this.traceId = traceId
+    this.details = details || {}
+  }
+}
+
 async function apiFetch(path, { method = 'GET', body, headers = {}, isFormData = false } = {}) {
   const accessToken = localStorage.getItem('accessToken')
 
@@ -15,11 +26,24 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, isFormData =
   }
 
   const res = await fetch(`/api${path}`, options)
-  const data = await res.json().catch(() => ({}))
+  const payload = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new Error(data.message || `요청 실패 (${res.status})`)
+    throw new ApiError({
+      message: payload.message,
+      status: res.status,
+      errorCode: payload.errorCode,
+      traceId: payload.traceId,
+      details: payload.details,
+    })
   }
-  return data
+
+  // petchainAPI 표준 응답(ApiResponse<T>)은 data를 반환하고,
+  // auth/pets 등 기존 raw 응답은 그대로 반환한다.
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'data') && Object.prototype.hasOwnProperty.call(payload, 'traceId')) {
+    return payload.data
+  }
+  return payload
 }
 
+export { ApiError }
 export default apiFetch

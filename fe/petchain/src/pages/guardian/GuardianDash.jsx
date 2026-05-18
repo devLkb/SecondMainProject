@@ -609,37 +609,41 @@ export default function GuardianDash({ showToast, onLogout }) {
         }
 
         if (recordsRes.status === 'fulfilled') {
-          const content = recordsRes.value?.content
-          const apiRecords = Array.isArray(content) ? content : []
+          const apiRecords = Array.isArray(recordsRes.value?.records)
+            ? recordsRes.value.records
+            : (Array.isArray(recordsRes.value?.content) ? recordsRes.value.content : [])
           if (apiRecords.length > 0) {
             const mapped = apiRecords.map(r => ({
-              id: String(r.id),
-              petId: String(r.petId),
+              id: String(r.recordId || r.id),
+              petId: String(r.petId || ''),
               petName: r.petName || '',
-              date: r.date || '',
-              diseases: Array.isArray(r.diseases) ? r.diseases : [],
-              treatments: Array.isArray(r.treatments) ? r.treatments : [],
-              cost: r.cost || 0,
+              date: (r.treatmentDate || r.date || '').replaceAll('-', '.'),
+              diseases: Array.isArray(r.diagnosisCodes) ? r.diagnosisCodes : (Array.isArray(r.diseases) ? r.diseases : []),
+              treatments: Array.isArray(r.treatmentCodes) ? r.treatmentCodes : (Array.isArray(r.treatments) ? r.treatments : []),
+              cost: r.treatmentCost || r.cost || 0,
               memo: r.memo || '',
-              onChain: !!r.onChain,
+              onChain: !!(r.recordHash || r.onChain),
             }))
             update({ medicalRecords: mapped })
           }
         }
 
         if (consentsRes.status === 'fulfilled') {
-          const content = consentsRes.value?.content
-          const apiConsents = Array.isArray(content) ? content : []
+          const apiConsents = Array.isArray(consentsRes.value?.consents)
+            ? consentsRes.value.consents
+            : (Array.isArray(consentsRes.value?.content) ? consentsRes.value.content : [])
           if (apiConsents.length > 0) {
             const statusMap = { ACTIVE: 'active', REVOKED: 'revoked', PENDING: 'pending' }
             const mapped = {}
             apiConsents.forEach(c => {
               const key = String(c.recordId)
               mapped[key] = {
-                consentId: String(c.id),
+                consentId: String(c.consentId || c.id),
                 recordId: key,
+                guardianId: c.guardianId,
+                insurerId: c.insurerId,
                 status: statusMap[c.status] || (c.status || '').toLowerCase(),
-                insurerName: c.insurerName || '',
+                insurerName: c.insurerName || c.insurerId || '',
                 pet: c.petName || '',
                 disease: c.disease || '',
                 hospital: c.hospitalName || '',
@@ -649,7 +653,7 @@ export default function GuardianDash({ showToast, onLogout }) {
             update({ consents: mapped })
           }
         }
-      } catch (_) {
+      } catch {
         // Silently fall back to existing mock data
       }
     }
@@ -673,9 +677,9 @@ export default function GuardianDash({ showToast, onLogout }) {
         await apiFetch(`/consents/${c.consentId}/revoke`, { method: 'POST' })
       } else {
         // revoked/pending → re-consent
-        await apiFetch('/consents', { method: 'POST', body: { recordId: c.recordId, insuranceCompanyId: c.consentId } })
+        await apiFetch('/consents', { method: 'POST', body: { recordId: c.recordId, insurerId: c.insurerId || localStorage.getItem('userId') || '1', guardianId: c.guardianId || localStorage.getItem('userId') || '1' } })
       }
-    } catch (_) {
+    } catch {
       // API failure: local state already updated, no rollback needed for demo
     }
   }
@@ -706,7 +710,7 @@ export default function GuardianDash({ showToast, onLogout }) {
           update({ pets: apiPets.map(p => ({ petId: String(p.id), name: p.name, species: p.species, breed: p.breed, birthYear: p.birthYear, insurer: 'DB손해보험' })) })
         }
       }
-    } catch (_) {
+    } catch {
       // API failure: local state already updated via addPet()
     }
   }

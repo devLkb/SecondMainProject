@@ -219,7 +219,7 @@ export default function HospitalDash({ showToast, onLogout }) {
       formData.append('metadata', new Blob([metadata], { type: 'application/json' }))
       formData.append('recordFile', new Blob(['record'], { type: 'application/octet-stream' }), 'record.bin')
       await apiFetch('/records', { method: 'POST', body: formData, isFormData: true })
-    } catch (_) {
+    } catch {
       // API failure: local state already updated
     }
   }
