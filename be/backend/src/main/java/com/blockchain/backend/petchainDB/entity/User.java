@@ -8,7 +8,9 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+    @Index(name = "idx_users_oauth", columnList = "oauth_provider, oauth_provider_id")
+})
 @Getter @Setter @NoArgsConstructor
 public class User extends TimestampedEntity {
 
@@ -32,4 +34,12 @@ public class User extends TimestampedEntity {
 
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
+
+    // OAuth 로그인 제공자: google | naver | kakao | null (이메일 가입자)
+    @Column(name = "oauth_provider", length = 20)
+    private String oauthProvider;
+
+    // OAuth 제공자의 고유 사용자 ID
+    @Column(name = "oauth_provider_id", length = 255)
+    private String oauthProviderId;
 }

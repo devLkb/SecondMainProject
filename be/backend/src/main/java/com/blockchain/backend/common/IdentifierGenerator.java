@@ -27,11 +27,11 @@ public final class IdentifierGenerator {
     }
 
     public static String generateRecordId() {
-        return "REC-" + Year.now().getValue() + "-" + digits(5);
+        return "REC-" + Year.now().getValue() + "-" + digits(8);
     }
 
     public static String generateClaimId() {
-        return "CLM-" + Year.now().getValue() + "-" + digits(5);
+        return "CLM-" + Year.now().getValue() + "-" + digits(8);
     }
 
     public static String generateNftTokenId() {

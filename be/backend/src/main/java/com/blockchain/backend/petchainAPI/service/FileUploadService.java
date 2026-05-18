@@ -24,6 +24,9 @@ public class FileUploadService {
         MedicalRecord record = medicalRecordRepository.findById(recordId)
                 .orElseThrow(() -> new IllegalArgumentException("진료기록을 찾을 수 없습니다."));
 
+        if (s3Key == null || s3Key.isBlank()) {
+            throw new IllegalArgumentException("s3Key는 필수입니다.");
+        }
         validateFileType(fileType);
         validateMimeType(mimeType);
 

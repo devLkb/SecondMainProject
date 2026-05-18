@@ -31,7 +31,8 @@ public enum ApiErrorCode {
     PACKAGE_DELETED(HttpStatus.GONE),
     PACKAGE_EXPIRED(HttpStatus.GONE),
 
-    AUDIT_LOG_WRITE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR);
+    AUDIT_LOG_WRITE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR),
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final HttpStatus httpStatus;
 

@@ -32,4 +32,7 @@ public class InsuranceCompany extends TimestampedEntity {
 
     @Column(name = "admin_email", length = 255)
     private String adminEmail;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = false;
 }

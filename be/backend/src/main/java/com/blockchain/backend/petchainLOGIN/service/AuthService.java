@@ -87,7 +87,6 @@ public class AuthService {
         hospital.setPhone(req.getPhone());
         hospital.setFabricOrgId(req.getFabricOrgId());
         hospital.setAdminEmail(req.getAdminEmail());
-        hospital.setIsActive(false);
         hospitalRepository.save(hospital);
 
         createPointBalance(PointOwnerType.HOSPITAL, hospital.getId());
@@ -167,7 +166,8 @@ public class AuthService {
         // 이전 refresh token 전부 revoke — 동일 계정 중복 세션 방지
         refreshTokenRepository.revokeAllByUserId(user.getId());
 
-        return issueTokens(user, null, "로그인이 완료되었습니다.");
+        String memberNumber = resolveMemberNumber(user);
+        return issueTokens(user, memberNumber, "로그인이 완료되었습니다.");
     }
 
     private AuthResponse issueTokens(User user, String memberNumber, String message) {
@@ -189,6 +189,24 @@ public class AuthService {
                 .refreshToken(rawRefreshToken)
                 .message(message)
                 .build();
+    }
+
+    private String resolveMemberNumber(User user) {
+        return switch (user.getMemberType()) {
+            case MemberType.USER ->
+                guardianRepository.findByUser_Id(user.getId())
+                        .map(Guardian::getMemberNumber)
+                        .orElse(null);
+            case MemberType.HOSPITAL ->
+                hospitalRepository.findByUser_Id(user.getId())
+                        .map(Hospital::getMemberNumber)
+                        .orElse(null);
+            case MemberType.INSURANCE ->
+                insuranceCompanyRepository.findByUser_Id(user.getId())
+                        .map(InsuranceCompany::getMemberNumber)
+                        .orElse(null);
+            default -> null;
+        };
     }
 
     private String uniqueUserNumber() {
