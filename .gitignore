@@ -6,11 +6,11 @@ Thumbs.db
 .idea/
 .vscode/
 *.iml
-.codex/
-.agents/
-.omc/
-.omx/
-.claude/
+*.codex/
+*.agents/
+*.omc/
+*.omx/
+*.claude/
 
 # --- Logs / runtime ---
 *.log
