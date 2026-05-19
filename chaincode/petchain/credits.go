@@ -1,3 +1,6 @@
+//병원 크레딧을 관리합니다.AccrueCredit은 검증 성공 보상으로 병원에 크레딧을 적립합니다.
+// SpendCreditSaaS는 SaaS 기능 사용으로 크레딧을 쓰고, SpendCreditBanner는 배너 상품 사용으로 크레딧을 씁니다.
+// BurnExpiredCredit은 12개월 지난 크레딧 소멸, ReverseCredit은 역거래 처리입니다.
 package main
 
 import (
@@ -9,11 +12,20 @@ import (
 )
 
 func (c *PetChainContract) AccrueCredit(ctx contractapi.TransactionContextInterface, hospitalId, verificationId, amount, accruedAt, idempotencyKey string) (string, error) {
-	if err := c.requireOrg(ctx, platformMSP); err != nil {
-		return "", err
-	}
 	if err := requireNonEmpty(map[string]string{"hospitalId": hospitalId, "verificationId": verificationId, "amount": amount, "accruedAt": accruedAt}); err != nil {
 		return "", err
+	}
+	if c.isDedicatedClaimChannel(ctx.GetStub().GetChannelID()) {
+		if err := c.requireClaimDataChannel(ctx); err != nil {
+			return "", err
+		}
+	} else {
+		if err := c.requireOrg(ctx, platformMSP); err != nil {
+			return "", err
+		}
+		if err := c.requireClaimDataChannel(ctx); err != nil {
+			return "", err
+		}
 	}
 	numericAmount, err := assertPositiveInteger(amount, "amount")
 	if err != nil {
@@ -49,6 +61,9 @@ func (c *PetChainContract) SpendCreditSaaS(ctx contractapi.TransactionContextInt
 	if err := requireNonEmpty(map[string]string{"hospitalId": hospitalId, "featureId": featureId, "amount": amount, "spentAt": spentAt}); err != nil {
 		return "", err
 	}
+	if err := c.requireClaimDataChannel(ctx); err != nil {
+		return "", err
+	}
 	numericAmount, err := assertPositiveInteger(amount, "amount")
 	if err != nil {
 		return "", err
@@ -67,6 +82,9 @@ func (c *PetChainContract) SpendCreditBanner(ctx contractapi.TransactionContextI
 		return "", err
 	}
 	if err := requireNonEmpty(map[string]string{"hospitalId": hospitalId, "bannerType": bannerType, "amount": amount, "spentAt": spentAt, "approvalId": approvalId}); err != nil {
+		return "", err
+	}
+	if err := c.requireClaimDataChannel(ctx); err != nil {
 		return "", err
 	}
 	expected := bannerAmounts[bannerType]
@@ -91,6 +109,9 @@ func (c *PetChainContract) BurnExpiredCredit(ctx contractapi.TransactionContextI
 		return "", err
 	}
 	if err := requireNonEmpty(map[string]string{"transactionId": transactionId, "expiredAt": expiredAt}); err != nil {
+		return "", err
+	}
+	if err := c.requireClaimDataChannel(ctx); err != nil {
 		return "", err
 	}
 	if err := assertIsoDate(expiredAt, "expiredAt"); err != nil {
@@ -136,6 +157,9 @@ func (c *PetChainContract) ReverseCredit(ctx contractapi.TransactionContextInter
 		return "", err
 	}
 	if err := requireNonEmpty(map[string]string{"originalTransactionId": originalTransactionId, "reason": reason, "reversedBy": reversedBy, "reversedAt": reversedAt}); err != nil {
+		return "", err
+	}
+	if err := c.requireClaimDataChannel(ctx); err != nil {
 		return "", err
 	}
 	if err := assertIsoDate(reversedAt, "reversedAt"); err != nil {

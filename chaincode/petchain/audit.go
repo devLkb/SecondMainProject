@@ -1,13 +1,24 @@
+// 감사 로그를 기록합니다.RecordAuditEvent는 누가, 어떤 리소스에, 어떤 결과를 만들었는지 메타데이터를 저장합니다.
+// GetAuditEvent로 단건 감사 로그를 조회합니다. 감사 원문 전체보다는 추적 가능한 메타데이터와 해시를 남기는 구조입니다.
 package main
 
 import "github.com/hyperledger/fabric-contract-api-go/contractapi"
 
 func (c *PetChainContract) RecordAuditEvent(ctx contractapi.TransactionContextInterface, auditLogId, eventType, actorId, actorOrgId, resourceType, resourceId, submissionId, verificationId, result, failureCode, pointsDelta, creditDelta, createdAt, auditHash string) (string, error) {
-	if err := c.requireOrg(ctx, platformMSP); err != nil {
-		return "", err
-	}
 	if err := requireNonEmpty(map[string]string{"auditLogId": auditLogId, "eventType": eventType, "actorId": actorId, "actorOrgId": actorOrgId, "resourceType": resourceType, "resourceId": resourceId, "result": result, "createdAt": createdAt}); err != nil {
 		return "", err
+	}
+	if c.isDedicatedClaimChannel(ctx.GetStub().GetChannelID()) {
+		if err := c.requireClaimDataChannel(ctx); err != nil {
+			return "", err
+		}
+	} else {
+		if err := c.requireOrg(ctx, platformMSP); err != nil {
+			return "", err
+		}
+		if err := c.requireClaimDataChannel(ctx); err != nil {
+			return "", err
+		}
 	}
 	if err := assertIsoDate(createdAt, "createdAt"); err != nil {
 		return "", err

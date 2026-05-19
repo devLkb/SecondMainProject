@@ -1,3 +1,5 @@
+//보험사 포인트를 관리합니다.IssuePoints는 보험사에 포인트를 발행하고, DeductPoints는 검증 API 성공 시 포인트를 차감합니다.
+//ReversePoints는 잘못된 거래를 7일 이내에 역거래로 되돌립니다. GetPointBalance, GetPointTransactions는 잔액과 거래내역 조회입니다.
 package main
 
 import (
@@ -8,10 +10,10 @@ import (
 )
 
 func (c *PetChainContract) IssuePoints(ctx contractapi.TransactionContextInterface, insurerId, amount, issuedBy, issuedAt string) (string, error) {
-	if err := c.requireOrg(ctx, platformMSP); err != nil {
+	if err := requireNonEmpty(map[string]string{"insurerId": insurerId, "amount": amount, "issuedBy": issuedBy, "issuedAt": issuedAt}); err != nil {
 		return "", err
 	}
-	if err := requireNonEmpty(map[string]string{"insurerId": insurerId, "amount": amount, "issuedBy": issuedBy, "issuedAt": issuedAt}); err != nil {
+	if err := c.requireClaimOperatorForInsurer(ctx, insurerId); err != nil {
 		return "", err
 	}
 	numericAmount, err := assertPositiveInteger(amount, "amount")
@@ -32,10 +34,10 @@ func (c *PetChainContract) IssuePoints(ctx contractapi.TransactionContextInterfa
 }
 
 func (c *PetChainContract) DeductPoints(ctx contractapi.TransactionContextInterface, insurerId, verificationId, amount, deductedAt, idempotencyKey string) (string, error) {
-	if err := c.requireOrg(ctx, platformMSP); err != nil {
+	if err := requireNonEmpty(map[string]string{"insurerId": insurerId, "verificationId": verificationId, "amount": amount, "deductedAt": deductedAt}); err != nil {
 		return "", err
 	}
-	if err := requireNonEmpty(map[string]string{"insurerId": insurerId, "verificationId": verificationId, "amount": amount, "deductedAt": deductedAt}); err != nil {
+	if err := c.requireClaimOperatorForInsurer(ctx, insurerId); err != nil {
 		return "", err
 	}
 	numericAmount, err := assertPositiveInteger(amount, "amount")
@@ -73,9 +75,6 @@ func (c *PetChainContract) DeductPoints(ctx contractapi.TransactionContextInterf
 }
 
 func (c *PetChainContract) ReversePoints(ctx contractapi.TransactionContextInterface, originalTransactionId, reason, reversedBy, reversedAt string) (string, error) {
-	if err := c.requireOrg(ctx, platformMSP); err != nil {
-		return "", err
-	}
 	if err := requireNonEmpty(map[string]string{"originalTransactionId": originalTransactionId, "reason": reason, "reversedBy": reversedBy, "reversedAt": reversedAt}); err != nil {
 		return "", err
 	}
@@ -85,6 +84,9 @@ func (c *PetChainContract) ReversePoints(ctx contractapi.TransactionContextInter
 	key, _ := c.key(ctx, "pointTx", originalTransactionId)
 	original, err := c.getRequired(ctx, key, "point transaction")
 	if err != nil {
+		return "", err
+	}
+	if err := c.requireClaimOperatorForInsurer(ctx, fmt.Sprint(original["insurerId"])); err != nil {
 		return "", err
 	}
 	if original["type"] == "POINT_REVERSAL" {
