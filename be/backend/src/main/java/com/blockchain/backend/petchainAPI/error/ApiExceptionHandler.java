@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -44,7 +45,7 @@ public class ApiExceptionHandler {
                                                                       HttpServletRequest request) {
         Map<String, Object> details = new LinkedHashMap<>();
         exception.getConstraintViolations().forEach(violation ->
-                details.put(violation.getPropertyPath().toString(), violation.getMessage())
+                details.put(detailName(violation.getPropertyPath().toString()), violation.getMessage())
         );
         return validationResponse("Request validation failed", details, request);
     }
@@ -52,13 +53,32 @@ public class ApiExceptionHandler {
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<ApiErrorResponse> handleHandlerMethodValidation(HandlerMethodValidationException exception,
                                                                           HttpServletRequest request) {
-        return validationResponse("Request validation failed", Map.of("reason", exception.getMessage()), request);
+        Map<String, Object> details = new LinkedHashMap<>();
+        exception.getParameterValidationResults().forEach(result -> {
+            String parameterName = result.getMethodParameter().getParameterName();
+            if (parameterName == null || parameterName.isBlank()) {
+                parameterName = result.getMethodParameter().getParameterType().getSimpleName();
+            }
+            details.put(parameterName, firstMessage(result.getResolvableErrors()));
+        });
+        exception.getCrossParameterValidationResults().forEach(result ->
+                details.put("method", safeMessage(result.getDefaultMessage(), "must be valid"))
+        );
+        if (details.isEmpty()) {
+            details.put("reason", safeMessage(exception.getMessage(), "Request validation failed"));
+        }
+        return validationResponse("Request validation failed", details, request);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleUnreadableMessage(HttpMessageNotReadableException exception,
                                                                     HttpServletRequest request) {
-        return validationResponse("Malformed or unsupported request body", Map.of("reason", exception.getMostSpecificCause().getMessage()), request);
+        String reason = exception.getMostSpecificCause() == null
+                ? null
+                : exception.getMostSpecificCause().getMessage();
+        return validationResponse("Malformed or unsupported request body",
+                Map.of("reason", safeMessage(reason, "Request body is malformed or unsupported")),
+                request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -97,5 +117,30 @@ public class ApiExceptionHandler {
                 details
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    private static String detailName(String propertyPath) {
+        if (propertyPath == null || propertyPath.isBlank()) {
+            return "reason";
+        }
+        int separatorIndex = propertyPath.lastIndexOf('.');
+        if (separatorIndex < 0 || separatorIndex == propertyPath.length() - 1) {
+            return propertyPath;
+        }
+        return propertyPath.substring(separatorIndex + 1);
+    }
+
+    private static String firstMessage(Iterable<? extends MessageSourceResolvable> errors) {
+        for (MessageSourceResolvable error : errors) {
+            String message = safeMessage(error.getDefaultMessage(), null);
+            if (message != null) {
+                return message;
+            }
+        }
+        return "must be valid";
+    }
+
+    private static String safeMessage(String message, String fallback) {
+        return message == null || message.isBlank() ? fallback : message;
     }
 }
