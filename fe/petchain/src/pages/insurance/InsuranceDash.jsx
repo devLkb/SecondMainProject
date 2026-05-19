@@ -45,7 +45,9 @@ const CHANNEL_INFO = [
 
 export default function InsuranceDash({ showToast, onLogout }) {
   const { state, setState } = useApp()
-  const [tab, setTab]               = useState('list')
+  const [tab, setTab]               = useState(() => localStorage.getItem('petchain_insurance_tab') || 'list')
+
+  useEffect(() => { localStorage.setItem('petchain_insurance_tab', tab) }, [tab])
   const [lastVerified, setLastVerified] = useState(null)
 
   const [flagModal, setFlagModal]   = useState(null)

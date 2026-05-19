@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppProvider } from './context/AppContext'
 import Landing from './pages/Landing'
 import AuthPage from './pages/AuthPage'
@@ -34,7 +34,8 @@ function initFromUrl() {
     localStorage.setItem('memberNumber', memberNumber || '')
     window.history.replaceState({}, '', pathname === '/admin' ? '/admin' : '/')
     const role = ROLE_MAP[memberType?.toUpperCase()] || 'guardian'
-    return { page: 'main', role, toast: null }
+    const page = role === 'guardian' ? 'landing' : 'main'
+    return { page, role, toast: null }
   }
 
   const token = localStorage.getItem('accessToken')
@@ -48,9 +49,10 @@ function initFromUrl() {
     return { page: 'admin', role: null, toast: null }
   }
 
-  // 루트 경로: 관리자·보험사 역할은 항상 랜딩 표시 (플랫폼 접근은 /admin 전용)
-  const publicRole = (role && role !== 'platform' && role !== 'insurance') ? role : null
-  return { page: publicRole ? 'main' : 'landing', role: publicRole, toast: null }
+  // 루트 경로: 보호자는 랜딩이 홈, 병원은 대시보드, 플랫폼·보험사는 /admin 전용
+  if (role === 'guardian') return { page: 'landing', role, toast: null }
+  if (role === 'hospital') return { page: 'main', role, toast: null }
+  return { page: 'landing', role: null, toast: null }
 }
 
 function AdminLogin({ onLogin }) {
@@ -148,11 +150,34 @@ function Inner() {
   const [role, setRole]         = useState(initRole)
   const [toast, setToast]       = useState(initToast)
 
+  // 초기 히스토리 상태 설정
+  useEffect(() => {
+    window.history.replaceState({ page: initPage, role: initRole }, '', window.location.pathname)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 브라우저 뒤로가기/앞으로가기 처리
+  useEffect(() => {
+    const handlePop = (e) => {
+      const s = e.state
+      if (!s) return
+      setPage(s.page || 'landing')
+      setRole(s.role || null)
+      if (s.authMode) setAuthMode(s.authMode)
+    }
+    window.addEventListener('popstate', handlePop)
+    return () => window.removeEventListener('popstate', handlePop)
+  }, [])
+
+  const [initialTab, setInitialTab] = useState(null)
+
   const showToast = (title, msg) => setToast({ title, msg })
 
   const handleLogin = (selectedRole) => {
     setRole(selectedRole)
-    setPage('main')
+    // 보호자는 랜딩이 홈, 병원·보험사·플랫폼은 전용 대시보드
+    const targetPage = selectedRole === 'guardian' ? 'landing' : 'main'
+    setPage(targetPage)
+    window.history.pushState({ page: targetPage, role: selectedRole }, '', window.location.pathname)
   }
 
   const handleLogout = () => {
@@ -161,17 +186,33 @@ function Inner() {
     localStorage.removeItem('memberType')
     localStorage.removeItem('userId')
     localStorage.removeItem('memberNumber')
+    localStorage.removeItem('petchain_guardian_tab')
+    localStorage.removeItem('petchain_hospital_tab')
+    localStorage.removeItem('petchain_insurance_tab')
     setRole(null)
-    if (window.location.pathname === '/admin') {
-      setPage('admin')
-    } else {
-      setPage('landing')
-    }
+    setInitialTab(null)
+    const targetPage = window.location.pathname === '/admin' ? 'admin' : 'landing'
+    setPage(targetPage)
+    window.history.pushState({ page: targetPage, role: null }, '', window.location.pathname)
   }
 
   const goAuth = (mode = 'login') => {
     setAuthMode(mode)
     setPage('auth')
+    window.history.pushState({ page: 'auth', authMode: mode, role: null }, '', window.location.pathname)
+  }
+
+  // 랜딩 nav에서 보호자 탭으로 이동
+  const goMain = (tab = 'home') => {
+    setInitialTab(tab)
+    setPage('main')
+    window.history.pushState({ page: 'main', role }, '', window.location.pathname)
+  }
+
+  // 대시보드에서 랜딩(홈)으로 복귀
+  const goHome = () => {
+    setPage('landing')
+    window.history.pushState({ page: 'landing', role }, '', window.location.pathname)
   }
 
   if (page === 'admin') {
@@ -186,7 +227,7 @@ function Inner() {
   if (page === 'landing') {
     return (
       <>
-        <Landing onGoAuth={goAuth} />
+        <Landing onGoAuth={goAuth} role={role} onGoMain={goMain} onLogout={handleLogout} />
         {toast && <Toast title={toast.title} msg={toast.msg} onClose={() => setToast(null)} />}
       </>
     )
@@ -205,7 +246,7 @@ function Inner() {
 
   return (
     <>
-      {role === 'guardian'  && <GuardianDash  {...dashProps} />}
+      {role === 'guardian'  && <GuardianDash  {...dashProps} initialTab={initialTab} onHome={goHome} />}
       {role === 'hospital'  && <HospitalDash  {...dashProps} />}
       {role === 'insurance' && <InsuranceDash {...dashProps} />}
       {role === 'platform'  && <Platform      {...dashProps} />}

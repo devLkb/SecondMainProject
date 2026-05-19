@@ -731,9 +731,11 @@ function RankingTab() {
 }
 
 /* ── Main ── */
-export default function GuardianDash({ showToast, onLogout }) {
+export default function GuardianDash({ showToast, onLogout, initialTab = null, onHome }) {
   const { state, update, toggleConsent, addPet } = useApp()
-  const [tab,          setTab]          = useState('home')
+  const [tab, setTab] = useState(() => initialTab || localStorage.getItem('petchain_guardian_tab') || 'home')
+
+  useEffect(() => { localStorage.setItem('petchain_guardian_tab', tab) }, [tab])
   const [modal,        setModal]        = useState(null)
   const [detailRecord, setDetailRecord] = useState(null)
   const [newPet,       setNewPet]       = useState({ name:'', species:'dog', breed:'', birthYear:'', chipNo:'', petId:'' })
@@ -786,7 +788,7 @@ export default function GuardianDash({ showToast, onLogout }) {
 
         {/* ── 사이드바 ── */}
         <nav className="gd-sidebar">
-          <div className="gd-logo">
+          <div className="gd-logo" onClick={onHome} style={{cursor:'pointer'}} title="메인 화면으로">
             <div className="gd-logo-name">PET<span style={{color:'#b8885a'}}>CHAIN.</span></div>
             <div className="gd-logo-sub">GUARDIAN · MEMBER</div>
           </div>

@@ -206,7 +206,9 @@ function OrgTab() {
 
 export default function HospitalDash({ showToast, onLogout }) {
   const { state, setState, addMedicalRecord } = useApp()
-  const [tab, setTab] = useState('reg')
+  const [tab, setTab] = useState(() => localStorage.getItem('petchain_hospital_tab') || 'reg')
+
+  useEffect(() => { localStorage.setItem('petchain_hospital_tab', tab) }, [tab])
 
   const consents       = state.consents
   const activeConsents = Object.values(consents).filter(c => c.status === 'active')
