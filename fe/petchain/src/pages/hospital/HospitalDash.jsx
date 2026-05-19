@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import DashNav from '../../components/common/DashNav'
 import Overlay from '../../components/common/Overlay'
 import { useApp } from '../../context/AppContext'
@@ -135,6 +135,75 @@ function RecordDetailModal({ record, onClose }) {
   )
 }
 
+// 조직 정보 탭
+function OrgTab() {
+  const orgId   = localStorage.getItem('memberNumber') || localStorage.getItem('userId') || '-'
+  const orgName = localStorage.getItem('hospitalName') || '동물병원'
+
+  const CH1_MEMBERS = [
+    { label: '한국수의사회', role: 'Orderer', color: '#a78bfa' },
+    { label: '중소동물병원 A', role: '병원', color: '#fb923c' },
+    { label: '중소동물병원 B', role: '병원', color: '#fb923c' },
+    { label: '중소동물병원 C', role: '병원', color: '#fb923c' },
+    { label: 'DB손해보험', role: '보험사', color: '#16a34a' },
+    { label: '현대해상', role: '보험사', color: '#16a34a' },
+  ]
+
+  return (
+    <div className="fade-in">
+      <div className="pane-h">조직 정보</div>
+      <div className="pane-sub">현재 소속 채널 및 하이퍼레저 패브릭 네트워크 구성</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+        <div className="card">
+          <div className="card-title">현재 소속 조직</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {[
+              ['조직 유형',   '수의사회 소속'],
+              ['채널',        '수의사회 채널'],
+              ['Org ID',      orgId],
+              ['병원명',      orgName],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14 }}>
+                <span style={{ color: 'var(--muted)', fontWeight: 500 }}>{k}</span>
+                <span style={{ fontWeight: 600 }} className={k === 'Org ID' ? 'mono' : ''}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card" style={{ background: 'var(--brand-xl)', border: '1px solid var(--brand-l)' }}>
+          <div className="card-title">독립 조직 신청</div>
+          <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 16 }}>
+            대형 동물병원은 별도 비용으로 독립 패브릭 조직을 생성할 수 있습니다. 독립 조직은 전용 채널을 운영하며 보험사와 직접 협약을 맺을 수 있습니다.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+            {['전용 채널 정책 설정', '보험사와 직접 협약', '별도 크레딧 체계'].map(b => (
+              <div key={b} style={{ fontSize: 13, color: 'var(--brand)', display: 'flex', gap: 6 }}>
+                <span>→</span><span>{b}</span>
+              </div>
+            ))}
+          </div>
+          <button className="btn btn-primary btn-sm">독립 조직 신청 문의</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">수의사회 채널 구성원</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          {CH1_MEMBERS.map((m, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', background: 'var(--bg-2)', borderRadius: 10 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: m.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 14, flex: 1 }}>{m.label}</span>
+              <span style={{ fontSize: 12, color: m.color, fontWeight: 600 }}>{m.role}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function HospitalDash({ showToast, onLogout }) {
   const { state, setState, addMedicalRecord } = useApp()
   const [tab, setTab] = useState('reg')
@@ -142,27 +211,75 @@ export default function HospitalDash({ showToast, onLogout }) {
   const consents       = state.consents
   const activeConsents = Object.values(consents).filter(c => c.status === 'active')
 
-  // 등록 폼
-  const [searchId,        setSearchId]        = useState('')
-  const [foundPet,        setFoundPet]        = useState(null)
-  const [formDate,        setFormDate]        = useState(new Date().toISOString().slice(0, 10))
-  const [formDiseases,    setFormDiseases]    = useState([])
-  const [formTreatments,  setFormTreatments]  = useState([])
-  const [formCost,        setFormCost]        = useState('')
-  const [formMemo,        setFormMemo]        = useState('')
+  const [searchId,       setSearchId]       = useState('')
+  const [searchLoading,  setSearchLoading]  = useState(false)
+  const [foundPet,       setFoundPet]       = useState(null)
+  const [formDate,       setFormDate]       = useState(new Date().toISOString().slice(0, 10))
+  const [formDiseases,   setFormDiseases]   = useState([])
+  const [formTreatments, setFormTreatments] = useState([])
+  const [formCost,       setFormCost]       = useState('')
+  const [formMemo,       setFormMemo]       = useState('')
 
-  // 이전 진료기록 페이지네이션
-  const [prevPage, setPrevPage]     = useState(0)
-  const [prevMonth, setPrevMonth]   = useState('전체')
+  const [prevPage,     setPrevPage]     = useState(0)
+  const [prevMonth,    setPrevMonth]    = useState('전체')
   const [detailRecord, setDetailRecord] = useState(null)
 
-  const handleSearch = () => {
-    const pet = state.pets.find(p => p.petId.toUpperCase() === searchId.trim().toUpperCase())
-    if (!pet) { showToast('조회 실패', '등록된 반려동물을 찾을 수 없습니다'); setFoundPet(null); return }
+  // 동의 목록 API 로드
+  useEffect(() => {
+    async function loadConsents() {
+      try {
+        const data = await apiFetch('/consents')
+        if (data && Array.isArray(data)) {
+          const map = {}
+          data.forEach(c => {
+            map[c.recordId] = {
+              recordId:    c.recordId,
+              consentId:   c.consentId || c.id,
+              petId:       c.petId,
+              status:      (c.status || 'pending').toLowerCase(),
+              pet:         c.petName || c.pet || '',
+              hospital:    c.hospitalName || c.hospital || '',
+              insurerName: c.insurerName || '',
+              insurerId:   c.insurerId || '',
+              disease:     c.disease || '',
+              treatment:   c.treatment || '',
+              cost:        c.cost || 0,
+              date:        c.date || '',
+            }
+          })
+          setState(s => ({ ...s, consents: map }))
+        }
+      } catch { /* 서버 미연결 시 무시 */ }
+    }
+    loadConsents()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSearch = async () => {
+    const id = searchId.trim().toUpperCase()
+    if (!id) return
+    setSearchLoading(true)
+    setFoundPet(null)
+    try {
+      const data = await apiFetch(`/pets/${id}`)
+      if (data) {
+        const records = data.records || data.medicalRecords || []
+        setFoundPet({ ...data, petId: data.petId || id, records })
+        setPrevPage(0)
+        setPrevMonth('전체')
+        return
+      }
+    } catch { /* API 실패 시 로컬 폴백 */ }
+    const pet = state.pets.find(p => p.petId.toUpperCase() === id)
+    if (!pet) {
+      showToast('조회 실패', '등록된 반려동물을 찾을 수 없습니다')
+      setSearchLoading(false)
+      return
+    }
     const records = state.medicalRecords.filter(r => r.petId === pet.petId)
     setFoundPet({ ...pet, records })
     setPrevPage(0)
     setPrevMonth('전체')
+    setSearchLoading(false)
   }
 
   // 달 목록 추출
@@ -251,7 +368,9 @@ export default function HospitalDash({ showToast, onLogout }) {
                       placeholder="예: A12345678" value={searchId}
                       onChange={e => { setSearchId(e.target.value.toUpperCase()); setFoundPet(null) }}
                       onKeyDown={e => e.key === 'Enter' && handleSearch()} />
-                    <button className="btn btn-primary" onClick={handleSearch}>조회</button>
+                    <button className="btn btn-primary" onClick={handleSearch} disabled={searchLoading}>
+                      {searchLoading ? '조회 중...' : '조회'}
+                    </button>
                   </div>
 
                   {foundPet && (
@@ -474,6 +593,9 @@ export default function HospitalDash({ showToast, onLogout }) {
           </div>
         )}
       </div>
+
+        {/* ── 조직 정보 ── */}
+        {tab === 'org' && <OrgTab />}
 
       {detailRecord && <RecordDetailModal record={detailRecord} onClose={() => setDetailRecord(null)} />}
     </>
