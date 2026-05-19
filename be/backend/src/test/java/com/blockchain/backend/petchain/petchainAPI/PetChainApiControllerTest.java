@@ -10,8 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.blockchain.backend.petchainAPI.controller.AdminController;
 import com.blockchain.backend.petchainAPI.controller.ConsentController;
+import com.blockchain.backend.petchainAPI.controller.FileUploadController;
 import com.blockchain.backend.petchainAPI.controller.InternalVerificationController;
 import com.blockchain.backend.petchainAPI.controller.PointController;
+import com.blockchain.backend.petchainAPI.controller.PostController;
 import com.blockchain.backend.petchainAPI.controller.RecordController;
 import com.blockchain.backend.petchainAPI.controller.SubmissionController;
 import com.blockchain.backend.petchainAPI.controller.VerificationController;
@@ -20,6 +22,7 @@ import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;
 import com.blockchain.backend.petchainAPI.dto.common.ConsentStatus;
 import com.blockchain.backend.petchainAPI.dto.common.PackageAccessStatus;
 import com.blockchain.backend.petchainAPI.dto.common.VerificationStatus;
+import com.blockchain.backend.petchainAPI.dto.post.PostDtos;
 import com.blockchain.backend.petchainAPI.dto.submission.SubmissionDtos;
 import com.blockchain.backend.petchainAPI.dto.verification.VerificationDtos;
 import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
@@ -28,15 +31,18 @@ import com.blockchain.backend.petchainAPI.port.AdminApiPort;
 import com.blockchain.backend.petchainAPI.port.ConsentApiPort;
 import com.blockchain.backend.petchainAPI.port.InternalVerificationApiPort;
 import com.blockchain.backend.petchainAPI.port.PointApiPort;
+import com.blockchain.backend.petchainAPI.port.PostApiPort;
 import com.blockchain.backend.petchainAPI.port.RecordApiPort;
 import com.blockchain.backend.petchainAPI.port.SubmissionApiPort;
 import com.blockchain.backend.petchainAPI.port.VerificationApiPort;
 import com.blockchain.backend.petchainAPI.security.ApiActor;
+import com.blockchain.backend.petchainAPI.service.FileUploadService;
 import com.blockchain.backend.petchainLOGIN.util.JwtUtil;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -52,7 +58,9 @@ import org.springframework.test.web.servlet.MockMvc;
         VerificationController.class,
         InternalVerificationController.class,
         PointController.class,
-        AdminController.class
+        AdminController.class,
+        PostController.class,
+        FileUploadController.class
 })
 @AutoConfigureMockMvc(addFilters = false)
 class PetChainApiControllerTest {
@@ -79,6 +87,12 @@ class PetChainApiControllerTest {
 
     @MockitoBean
     AdminApiPort adminApiPort;
+
+    @MockitoBean
+    PostApiPort postApiPort;
+
+    @MockitoBean
+    FileUploadService fileUploadService;
 
     @MockitoBean
     JwtUtil jwtUtil;
@@ -188,6 +202,147 @@ class PetChainApiControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    }
+
+
+    @Test
+    void apiExceptionResponsePreservesErrorShapeDetailsAndTraceId() throws Exception {
+        when(verificationApiPort.verifySubmission(
+                any(ApiActor.class),
+                eq("sub-1"),
+                any(VerificationDtos.VerificationRequest.class),
+                eq(null)
+        )).thenThrow(new ApiException(
+                ApiErrorCode.INSUFFICIENT_POINTS,
+                "Insurer point balance is insufficient",
+                Map.of("required", 1, "balance", 0)
+        ));
+
+        mockMvc.perform(post("/submissions/sub-1/verification")
+                        .header("X-Trace-Id", "trace-api-exception")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validVerificationRequest()))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.errorCode").value("INSUFFICIENT_POINTS"))
+                .andExpect(jsonPath("$.message").value("Insurer point balance is insufficient"))
+                .andExpect(jsonPath("$.traceId").value("trace-api-exception"))
+                .andExpect(jsonPath("$.details.required").value(1))
+                .andExpect(jsonPath("$.details.balance").value(0));
+    }
+
+    @Test
+    void requestBodyValidationReturnsFieldDetails() throws Exception {
+        mockMvc.perform(post("/submissions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.details.recordId").exists())
+                .andExpect(jsonPath("$.details.insurerId").exists());
+    }
+
+    @Test
+    void requestParamValidationReturnsParameterDetails() throws Exception {
+        mockMvc.perform(get("/records")
+                        .param("page", "-1")
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.details.page").exists())
+                .andExpect(jsonPath("$.details.size").exists());
+    }
+
+    @Test
+    void malformedJsonReturnsValidationErrorWithReason() throws Exception {
+        mockMvc.perform(post("/submissions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"recordId\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value("Malformed or unsupported request body"))
+                .andExpect(jsonPath("$.details.reason").exists());
+    }
+
+    @Test
+    void illegalArgumentExceptionMapsToBadRequest() throws Exception {
+        when(recordApiPort.getRecord(any(ApiActor.class), eq("record-1")))
+                .thenThrow(new IllegalArgumentException("recordId is invalid"));
+
+        mockMvc.perform(get("/records/record-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value("recordId is invalid"));
+    }
+
+    @Test
+    void illegalStateExceptionMapsToGenericInternalError() throws Exception {
+        when(recordApiPort.getRecord(any(ApiActor.class), eq("record-2")))
+                .thenThrow(new IllegalStateException("database password leaked detail"));
+
+        mockMvc.perform(get("/records/record-2"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.message").value("서버 오류가 발생했습니다."));
+    }
+
+    @Test
+    void postCreateRejectsBlankContentWithFieldDetails() throws Exception {
+        mockMvc.perform(post("/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"   "}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details.content").value("게시물 내용을 입력해주세요."));
+    }
+
+    @Test
+    void postCreateMapsServiceApiException() throws Exception {
+        when(postApiPort.createPost(any(ApiActor.class), any(PostDtos.CreatePostRequest.class)))
+                .thenThrow(new ApiException(ApiErrorCode.CONFLICT, "Post already exists", Map.of("content", "duplicate")));
+
+        mockMvc.perform(post("/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"hello"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("CONFLICT"))
+                .andExpect(jsonPath("$.message").value("Post already exists"))
+                .andExpect(jsonPath("$.details.content").value("duplicate"));
+    }
+
+    @Test
+    void fileUploadRejectsMissingS3KeyWithFieldDetails() throws Exception {
+        mockMvc.perform(post("/records/1/files")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.details.s3Key").exists());
+    }
+
+    @Test
+    void fileUploadMapsServiceException() throws Exception {
+        when(fileUploadService.saveFileMeta(eq(1L), eq("records/1/file.pdf"), eq("file.pdf"), eq(10L), eq("application/pdf"), eq("other")))
+                .thenThrow(new IllegalArgumentException("진료기록을 찾을 수 없습니다."));
+
+        mockMvc.perform(post("/records/1/files")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "s3Key":"records/1/file.pdf",
+                                  "originalFilename":"file.pdf",
+                                  "fileSize":10,
+                                  "mimeType":"application/pdf"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value("진료기록을 찾을 수 없습니다."));
     }
 
     @Test
