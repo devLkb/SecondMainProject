@@ -64,22 +64,14 @@ export default function AuthPage({ mode, onLogin, onBack }) {
   const [hEmail, setHEmail] = useState('')
   const [hPw, setHPw]       = useState('')
 
-  // 보험사 가입
-  const [iName, setIName]   = useState('')
-  const [iBiz, setIBiz]     = useState('')
-  const [iOrg, setIOrg]     = useState('')
-  const [iEmail, setIEmail] = useState('')
-  const [iPw, setIPw]       = useState('')
-
-  // 플랫폼 로그인
-  const [platId, setPlatId] = useState('')
-  const [platPw, setPlatPw] = useState('')
+  // 보험사 로그인 전용
+  const [iLoginId, setILoginId] = useState('')
+  const [iLoginPw, setILoginPw] = useState('')
 
   const roles = [
     { id: 'guardian',  icon: '🐾', name: '보호자',  desc: '반려동물 보험 청구' },
     { id: 'hospital',  icon: '🏥', name: '병원',    desc: '진료기록 관리' },
     { id: 'insurance', icon: '🛡️', name: '보험사',  desc: '검증 API 호출' },
-    { id: 'platform',  icon: '⚙️', name: '플랫폼',  desc: '관리자 콘솔' },
   ]
 
   const btnClass = {
@@ -122,11 +114,9 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('memberType', data.memberType)
       localStorage.setItem('userId', String(data.userId ?? ''))
       localStorage.setItem('memberNumber', data.memberNumber || '')
-      // memberType 케이스 무관하게 매핑, 실패 시 UI 선택 role로 폴백
       onLogin(ROLE_MAP[data.memberType?.toUpperCase()] || role)
     } catch (e) {
       if (isNetworkError(e)) {
-        // 백엔드 미실행 → UI 선택 role로 mock 로그인
         onLogin(role)
       } else {
         setError(e.message)
@@ -136,20 +126,20 @@ export default function AuthPage({ mode, onLogin, onBack }) {
     }
   }
 
-  async function handlePlatformLogin() {
+  async function handleInsuranceLogin() {
     setError('')
     setLoading(true)
     try {
-      const data = await api('/auth/login', { loginId: platId, password: platPw })
+      const data = await api('/auth/login', { loginId: iLoginId, password: iLoginPw })
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
       localStorage.setItem('userId', String(data.userId ?? ''))
       localStorage.setItem('memberNumber', data.memberNumber || '')
-      onLogin('platform')
+      onLogin('insurance')
     } catch (e) {
       if (isNetworkError(e)) {
-        onLogin('platform')
+        onLogin('insurance')
       } else {
         setError(e.message)
       }
@@ -195,20 +185,16 @@ export default function AuthPage({ mode, onLogin, onBack }) {
     }
   }
 
-  async function handleInsuranceSignup() {
-    setError('')
-    setLoading(true)
-    try {
-      await api('/auth/register/insurance', {
-        name: iName, businessNumber: iBiz, fabricOrgId: iOrg,
-        adminEmail: iEmail, password: iPw,
-      })
-      setError('등록 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.')
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
+  // 플랫폼 역할 클릭 시 바로 관리자 페이지로 리다이렉트
+  function handleRoleSelect(id) {
+    if (id === 'platform') {
+      window.location.href = 'http://localhost:5173/admin'
+      return
     }
+    setRole(id)
+    setError('')
+    // 보험사는 탭이 없으므로 로그인으로 고정
+    if (id === 'insurance') setTab('login')
   }
 
   return (
@@ -229,13 +215,15 @@ export default function AuthPage({ mode, onLogin, onBack }) {
           {roles.map(r => (
             <div
               key={r.id}
-              className={`role-pill ${role === r.id ? 'sel' : ''}`}
-              onClick={() => { setRole(r.id); setError('') }}
+              className={`role-pill ${role === r.id && r.id !== 'platform' ? 'sel' : ''}`}
+              onClick={() => handleRoleSelect(r.id)}
             >
               <div style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{r.icon}</div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: '#57534e', marginTop: 2 }}>{r.desc}</div>
+                <div style={{ fontSize: 12, color: '#57534e', marginTop: 2 }}>
+                  {r.id === 'platform' ? '관리자 페이지로 이동 →' : r.desc}
+                </div>
               </div>
             </div>
           ))}
@@ -265,18 +253,19 @@ export default function AuthPage({ mode, onLogin, onBack }) {
             </div>
           )}
 
-          {role === 'platform' ? (
+          {/* 보험사: 로그인만 */}
+          {role === 'insurance' ? (
             <>
-              <div style={{ fontSize: 26, fontWeight: 800, marginBottom: 4 }}>플랫폼 관리자</div>
-              <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 28 }}>PetChain 운영자 전용 계정</div>
-              <label className="fl">관리자 ID</label>
-              <input className="fi" placeholder="platform-admin" value={platId} onChange={e => setPlatId(e.target.value)} />
+              <div style={{ fontSize: 26, fontWeight: 800, marginBottom: 4 }}>보험사</div>
+              <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 28 }}>{desc.insurance}</div>
+              <label className="fl">기관 Org ID</label>
+              <input className="fi" placeholder="org-id" value={iLoginId} onChange={e => setILoginId(e.target.value)} />
               <label className="fl">비밀번호</label>
-              <input className="fi" type="password" placeholder="••••••••" value={platPw} onChange={e => setPlatPw(e.target.value)} />
+              <input className="fi" type="password" placeholder="••••••••" value={iLoginPw} onChange={e => setILoginPw(e.target.value)} />
               <button
-                className="btn btn-dark"
+                className={`btn ${btnClass.insurance}`}
                 style={{ width: '100%', justifyContent: 'center', padding: 13 }}
-                onClick={handlePlatformLogin}
+                onClick={handleInsuranceLogin}
                 disabled={loading}
               >
                 {loading ? '처리 중...' : '로그인'}
@@ -289,7 +278,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
               </div>
               <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 24 }}>{desc[role]}</div>
 
-              {/* Tabs */}
+              {/* Tabs — 보호자·병원만 표시 */}
               <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 24 }}>
                 {['login', 'signup'].map(t => (
                   <button
@@ -302,7 +291,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
                       color: tab === t ? 'var(--brand)' : 'var(--muted)', fontFamily: 'inherit',
                     }}
                   >
-                    {t === 'login' ? '로그인' : { guardian: '회원가입', hospital: '병원 등록', insurance: '보험사 등록' }[role]}
+                    {t === 'login' ? '로그인' : { guardian: '회원가입', hospital: '병원 등록' }[role]}
                   </button>
                 ))}
               </div>
@@ -400,36 +389,6 @@ export default function AuthPage({ mode, onLogin, onBack }) {
                     disabled={loading}
                   >
                     {loading ? '처리 중...' : '병원 등록 신청'}
-                  </button>
-                </>
-              )}
-
-              {tab === 'signup' && role === 'insurance' && (
-                <>
-                  <div className="fi-row">
-                    <div>
-                      <label className="fl">보험사명</label>
-                      <input className="fi" placeholder="DB손해보험" value={iName} onChange={e => setIName(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="fl">사업자등록번호</label>
-                      <input className="fi" placeholder="000-00-00000" value={iBiz} onChange={e => setIBiz(e.target.value)} />
-                    </div>
-                  </div>
-                  <label className="fl">Fabric Org ID</label>
-                  <input className="fi" placeholder="InsuranceA" value={iOrg} onChange={e => setIOrg(e.target.value)} />
-                  <label className="fl">관리자 이메일</label>
-                  <input className="fi" type="email" placeholder="admin@insurance.com" value={iEmail} onChange={e => setIEmail(e.target.value)} />
-                  <label className="fl">비밀번호</label>
-                  <input className="fi" type="password" placeholder="8자 이상" value={iPw} onChange={e => setIPw(e.target.value)} />
-                  <div className="a-notice">📋 등록 신청 후 플랫폼 관리자 승인이 필요합니다.</div>
-                  <button
-                    className={`btn ${btnClass[role]}`}
-                    style={{ width: '100%', justifyContent: 'center', padding: 13 }}
-                    onClick={handleInsuranceSignup}
-                    disabled={loading}
-                  >
-                    {loading ? '처리 중...' : '보험사 등록 신청'}
                   </button>
                 </>
               )}
