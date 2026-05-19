@@ -38,4 +38,17 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Object[]> findPopular(@Param("since") LocalDateTime since,
                                @Param("region") String region,
                                Pageable pageable);
+
+    /**
+     * 지역별 인기글: since 이후 작성된 삭제되지 않은 게시물을
+     * 지역 오름차순 → 좋아요 수 내림차순으로 정렬해 전부 반환.
+     * 호출측에서 각 지역의 첫 행만 취하면 그 지역의 1위 게시물이 된다.
+     * 결과는 Object[]{Post, Long likeCount}.
+     */
+    @Query("SELECT p, COUNT(pl) AS likeCount " +
+           "FROM Post p LEFT JOIN PostLike pl ON pl.post = p " +
+           "WHERE p.isDeleted = false AND p.createdAt >= :since AND p.authorRegion IS NOT NULL " +
+           "GROUP BY p " +
+           "ORDER BY p.authorRegion ASC, COUNT(pl) DESC, p.createdAt DESC")
+    List<Object[]> findPopularByRegion(@Param("since") LocalDateTime since);
 }

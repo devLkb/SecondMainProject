@@ -738,34 +738,88 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
 }
 
 /* ── RankingTab ── */
-function RankingTab({ state }) {
+// imageKeys[0]가 data URL / http URL이면 사진으로 사용, S3 key뿐이면 null
+function postPhoto(post) {
+  const k = post && Array.isArray(post.imageKeys) ? post.imageKeys[0] : null
+  return (typeof k === 'string' && (k.startsWith('data:') || k.startsWith('http'))) ? k : null
+}
+
+function RankingTab() {
+  const [regionTops,     setRegionTops]     = useState(null)  // [{region, topPost}] · null=로딩중
   const [selectedRegion, setSelectedRegion] = useState(null)
-  const getVoteSum = region => state.posts.filter(p=>p.authorRegion===region).reduce((acc,p)=>acc+(p.votes[region]||0),0)
-  const regionRanking = region => state.posts.filter(p=>p.authorRegion===region).sort((a,b)=>(b.votes[region]||0)-(a.votes[region]||0)).slice(0,10).map((p,i)=>({rank:i+1,petName:p.petName,petBreed:p.petBreed,votes:p.votes[region]||0}))
-  const maxVotes = Math.max(1,...REGION_PINS.map(r=>getVoteSum(r.name)))
+  const [ranking,        setRanking]        = useState(null)  // 선택 지역 TOP 10
+  const [rankLoading,    setRankLoading]    = useState(false)
+
+  // 지도 로드: 각 지역 좋아요 1위 게시물 (한 번의 호출)
+  useEffect(() => {
+    let alive = true
+    apiFetch('/posts/popular/by-region')
+      .then(rows => { if (alive) setRegionTops(Array.isArray(rows) ? rows : []) })
+      .catch(() => { if (alive) setRegionTops([]) })
+    return () => { alive = false }
+  }, [])
+
+  // 핀 클릭: 해당 지역 TOP 10 조회
+  const selectRegion = region => {
+    if (region === selectedRegion) { setSelectedRegion(null); setRanking(null); return }
+    setSelectedRegion(region)
+    setRanking(null)
+    setRankLoading(true)
+    apiFetch(`/posts/popular?region=${encodeURIComponent(region)}`)
+      .then(rows => setRanking(Array.isArray(rows) ? rows : []))
+      .catch(() => setRanking([]))
+      .finally(() => setRankLoading(false))
+  }
+
+  const topByRegion = {}
+  ;(regionTops || []).forEach(r => { topByRegion[r.region] = r.topPost })
+
   const rankStyle = rank => {
     if(rank===1) return {background:'#fef08a',color:'#713f12',border:'1.5px solid #fbbf24'}
     if(rank===2) return {background:'#e2e8f0',color:'#334155',border:'1.5px solid #94a3b8'}
     if(rank===3) return {background:'#fed7aa',color:'#7c2d12',border:'1.5px solid #fb923c'}
     return {background:'var(--bg-2)',color:'var(--muted)',border:'1px solid var(--border)'}
   }
+
   return (
     <div className="fade-in">
       <div className="pane-h">지역 랭킹</div>
-      <div className="pane-sub">지역 핀을 클릭해서 TOP 10 랭킹을 확인하세요</div>
+      <div className="pane-sub">지역 핀을 클릭해서 TOP 10 랭킹을 확인하세요 · 최근 30일 좋아요 기준</div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:24, alignItems:'start' }}>
         <div className="card" style={{ padding:20 }}>
           <svg viewBox="0 0 320 540" width="100%" style={{ display:'block', maxHeight:480 }}>
+            <defs>
+              {REGION_PINS.map(pin => (
+                <clipPath key={pin.name} id={`pinclip-${pin.label}`}>
+                  <circle cx={pin.x} cy={pin.y} r={16}/>
+                </clipPath>
+              ))}
+            </defs>
             <path d="M 140 25 L 170 28 L 210 42 L 258 72 L 278 120 L 285 185 L 282 260 L 272 330 L 258 395 L 248 445 L 228 472 L 200 480 L 170 478 L 140 468 L 108 450 L 78 420 L 60 375 L 52 310 L 56 245 L 64 185 L 76 140 L 90 100 L 112 68 L 132 45 Z" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5"/>
             <ellipse cx="148" cy="502" rx="38" ry="20" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5"/>
             {REGION_PINS.map(pin => {
-              const votes=getVoteSum(pin.name); const r=votes>0?7+(votes/maxVotes)*10:6; const isSel=selectedRegion===pin.name; const hasData=votes>0
+              const post=topByRegion[pin.name]; const photo=postPhoto(post)
+              const isSel=selectedRegion===pin.name; const hasData=!!post
+              const R=hasData?16:7
               return (
-                <g key={pin.name} onClick={() => setSelectedRegion(isSel?null:pin.name)} style={{ cursor:'pointer' }}>
-                  {isSel && <circle cx={pin.x} cy={pin.y} r={r+5} fill="rgba(37,99,235,0.15)"/>}
-                  <circle cx={pin.x} cy={pin.y} r={r} fill={isSel?'var(--brand)':hasData?'#6366f1':'#94a3b8'} opacity={hasData?1:.55}/>
-                  {votes>0 && <text x={pin.x} y={pin.y+0.5} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize="7" fontWeight="700">{votes}</text>}
-                  <text x={pin.x} y={pin.y+r+9} textAnchor="middle" fill={isSel?'var(--brand)':'#888'} fontSize="8.5" fontWeight={isSel?'700':'500'}>{pin.label}</text>
+                <g key={pin.name} onClick={() => selectRegion(pin.name)} style={{ cursor:'pointer' }}>
+                  {isSel && <circle cx={pin.x} cy={pin.y} r={R+5} fill="rgba(37,99,235,0.15)"/>}
+                  {photo ? (
+                    <>
+                      <image href={photo} x={pin.x-R} y={pin.y-R} width={R*2} height={R*2}
+                             clipPath={`url(#pinclip-${pin.label})`} preserveAspectRatio="xMidYMid slice"/>
+                      <circle cx={pin.x} cy={pin.y} r={R} fill="none" stroke={isSel?'var(--brand)':'#6366f1'} strokeWidth={isSel?3:2}/>
+                    </>
+                  ) : (
+                    <circle cx={pin.x} cy={pin.y} r={R} fill={isSel?'var(--brand)':hasData?'#6366f1':'#94a3b8'} opacity={hasData?1:.55}/>
+                  )}
+                  {hasData && (
+                    <>
+                      <circle cx={pin.x+R-3} cy={pin.y-R+3} r="7" fill="var(--brand)"/>
+                      <text x={pin.x+R-3} y={pin.y-R+3.5} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize="7" fontWeight="700">{post.likeCount}</text>
+                    </>
+                  )}
+                  <text x={pin.x} y={pin.y+R+9} textAnchor="middle" fill={isSel?'var(--brand)':'#888'} fontSize="8.5" fontWeight={isSel?'700':'500'}>{pin.label}</text>
                 </g>
               )
             })}
@@ -775,20 +829,30 @@ function RankingTab({ state }) {
           <div className="card">
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
               <span style={{ fontSize:18 }}>📍</span>
-              <div><div style={{ fontWeight:600, fontSize:16 }}>{selectedRegion}</div><div style={{ fontSize:13, color:'var(--muted)', marginTop:2 }}>지역 TOP 10</div></div>
+              <div><div style={{ fontWeight:600, fontSize:16 }}>{selectedRegion}</div><div style={{ fontSize:13, color:'var(--muted)', marginTop:2 }}>지역 TOP 10 · 좋아요 순</div></div>
             </div>
-            {regionRanking(selectedRegion).length===0 ? (
+            {rankLoading ? (
+              <div style={{ textAlign:'center', padding:'32px 0', color:'var(--muted)' }}>불러오는 중…</div>
+            ) : (ranking && ranking.length===0) ? (
               <div style={{ textAlign:'center', padding:'32px 0', color:'var(--muted)' }}><div style={{ fontSize:28, marginBottom:8 }}>🐾</div><div style={{ fontWeight:500 }}>등록된 게시물이 없습니다</div></div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {regionRanking(selectedRegion).map(item => (
-                  <div key={item.rank} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px', borderRadius:10, background:'var(--bg-2)' }}>
-                    <div style={{ width:26, height:26, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0, ...rankStyle(item.rank) }}>{item.rank}</div>
-                    <span style={{ fontSize:17 }}>🐶</span>
-                    <div style={{ flex:1 }}><div style={{ fontWeight:500, fontSize:14 }}>{item.petName}</div><div style={{ fontSize:12, color:'var(--muted)' }}>{item.petBreed}</div></div>
-                    <div style={{ fontSize:14, fontWeight:600, color:'var(--brand)' }}>{item.votes}표</div>
-                  </div>
-                ))}
+                {(ranking || []).map((post, i) => {
+                  const rank=i+1; const photo=postPhoto(post)
+                  return (
+                    <div key={post.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px', borderRadius:10, background:'var(--bg-2)' }}>
+                      <div style={{ width:26, height:26, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0, ...rankStyle(rank) }}>{rank}</div>
+                      {photo
+                        ? <img src={photo} alt="" style={{ width:34, height:34, borderRadius:8, objectFit:'cover', flexShrink:0 }}/>
+                        : <span style={{ fontSize:17 }}>🐶</span>}
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:500, fontSize:14 }}>{post.petName || post.authorName}</div>
+                        <div style={{ fontSize:12, color:'var(--muted)' }}>{post.petBreed || '—'}</div>
+                      </div>
+                      <div style={{ fontSize:14, fontWeight:600, color:'var(--brand)', flexShrink:0 }}>❤️ {post.likeCount}</div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -796,7 +860,11 @@ function RankingTab({ state }) {
           <div className="card" style={{ textAlign:'center', padding:'48px 24px', color:'var(--muted)' }}>
             <div style={{ fontSize:32, marginBottom:12 }}>🗺️</div>
             <div style={{ fontWeight:500, fontSize:16, marginBottom:6 }}>지역을 선택하세요</div>
-            <div style={{ fontSize:14 }}>지도의 핀을 클릭하면<br/>해당 지역 TOP 10을 확인할 수 있습니다</div>
+            <div style={{ fontSize:14 }}>
+              {regionTops===null
+                ? '지도를 불러오는 중입니다…'
+                : <>지도의 핀을 클릭하면<br/>해당 지역 TOP 10을 확인할 수 있습니다</>}
+            </div>
           </div>
         )}
       </div>
@@ -1017,7 +1085,7 @@ export default function GuardianDash({ showToast, onLogout }) {
           )}
 
           {tab==='community' && <CommunityTab state={state} update={update} showToast={showToast} onRegionSave={handleRegionSave} />}
-          {tab==='ranking'   && <RankingTab state={state} />}
+          {tab==='ranking'   && <RankingTab />}
           {tab==='myinfo'    && <MyInfoTab state={state} update={update} showToast={showToast} />}
         </main>
       </div>

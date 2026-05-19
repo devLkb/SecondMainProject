@@ -47,6 +47,13 @@ public class PostController {
         return ApiResponse.of(postApiPort.listPopularPosts(actor, region), request);
     }
 
+    @GetMapping("/popular/by-region")
+    public ApiResponse<List<PostDtos.RegionTopPostResponse>> listTopPostByRegion(
+            ApiActor actor,
+            HttpServletRequest request) {
+        return ApiResponse.of(postApiPort.listTopPostByRegion(actor), request);
+    }
+
     @GetMapping("/{postId}")
     public ApiResponse<PostDtos.PostDetailResponse> getPost(
             ApiActor actor,

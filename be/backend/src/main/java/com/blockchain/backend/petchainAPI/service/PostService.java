@@ -23,7 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -120,6 +122,30 @@ public class PostService implements PostApiPort {
                     return toSummary(post, likeCount, userId);
                 })
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PostDtos.RegionTopPostResponse> listTopPostByRegion(ApiActor actor) {
+        Long userId = parseUserId(actor);
+        LocalDateTime since = LocalDateTime.now().minusDays(POPULAR_WINDOW_DAYS);
+
+        // 행은 지역 오름차순 → 좋아요 수 내림차순. 지역별 첫 행이 곧 1위.
+        List<Object[]> rows = postRepository.findPopularByRegion(since);
+
+        Map<String, PostDtos.RegionTopPostResponse> byRegion = new LinkedHashMap<>();
+        for (Object[] row : rows) {
+            Post post = (Post) row[0];
+            String region = post.getAuthorRegion();
+            if (byRegion.containsKey(region)) continue; // 이미 1위가 정해진 지역은 건너뜀
+
+            long likeCount = ((Number) row[1]).longValue();
+            byRegion.put(region, PostDtos.RegionTopPostResponse.builder()
+                    .region(region)
+                    .topPost(toSummary(post, likeCount, userId))
+                    .build());
+        }
+        return List.copyOf(byRegion.values());
     }
 
     @Override

@@ -10,6 +10,7 @@ public interface PostApiPort {
     PostDtos.PostResponse createPost(ApiActor actor, PostDtos.CreatePostRequest request);
     Page<PostDtos.PostSummaryResponse> listPosts(ApiActor actor, String region, int page, int size);
     List<PostDtos.PostSummaryResponse> listPopularPosts(ApiActor actor, String region);
+    List<PostDtos.RegionTopPostResponse> listTopPostByRegion(ApiActor actor);
     PostDtos.PostDetailResponse getPost(ApiActor actor, Long postId);
     void deletePost(ApiActor actor, Long postId);
     PostDtos.LikeResponse toggleLike(ApiActor actor, Long postId);

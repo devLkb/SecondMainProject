@@ -115,6 +115,12 @@ public class PostDtos {
         private LocalDateTime createdAt;
     }
 
+    @Getter @Builder
+    public static class RegionTopPostResponse {
+        private String region;            // 지역명 (authorRegion)
+        private PostSummaryResponse topPost; // 해당 지역 좋아요 1위 게시물
+    }
+
     @Getter @AllArgsConstructor
     public static class LikeResponse {
         private Long postId;
