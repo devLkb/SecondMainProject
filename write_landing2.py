@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import os
+
+JSX = r"""import { useState } from 'react'
 
 const CHANNEL_1 = [
   { label: '한국수의사회',   role: 'Orderer',    c: '#a78bfa' },
@@ -376,3 +378,10 @@ export default function Landing({ onGoAuth }) {
     </div>
   )
 }
+"""
+
+path = r"C:\Users\ST-USER\Desktop\개발자 양성 교육\블록체인프로젝트(하이퍼)\pointpro\fe\petchain\src\pages\Landing.jsx"
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(JSX)
+import os
+print(f"OK: {os.path.getsize(path)} bytes")

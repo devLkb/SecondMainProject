@@ -13,31 +13,85 @@ const FLAG_REASONS = [
   { code: 'OTHER',                  label: '기타' },
 ]
 
+const CHANNEL_INFO = [
+  {
+    id: 'ch1',
+    name: '수의사회 채널',
+    badge: '공동 채널',
+    badgeColor: '#16a34a',
+    desc: '한국수의사회 주관. 소속 중소 동물병원 3곳과 보험사 2곳이 참여합니다.',
+    members: [
+      { label: '한국수의사회',   role: 'Orderer', dot: '#a78bfa' },
+      { label: '중소동물병원 A', role: '병원',    dot: '#fb923c' },
+      { label: '중소동물병원 B', role: '병원',    dot: '#fb923c' },
+      { label: '중소동물병원 C', role: '병원',    dot: '#fb923c' },
+      { label: 'DB손해보험',     role: '보험사',  dot: '#34d399' },
+      { label: '현대해상',       role: '보험사',  dot: '#34d399' },
+    ],
+  },
+  {
+    id: 'ch2',
+    name: '대형병원 독립 채널',
+    badge: '유료 독립',
+    badgeColor: '#ea580c',
+    desc: '독립 조직을 선택한 대형 동물병원 전용 채널. 보험사 2곳이 함께 참여합니다.',
+    members: [
+      { label: '대형동물병원',   role: '병원(독립)', dot: '#fb923c' },
+      { label: 'DB손해보험',     role: '보험사',     dot: '#34d399' },
+      { label: '현대해상',       role: '보험사',     dot: '#34d399' },
+    ],
+  },
+]
+
 export default function InsuranceDash({ showToast, onLogout }) {
   const { state, setState } = useApp()
   const [tab, setTab]               = useState('list')
   const [lastVerified, setLastVerified] = useState(null)
 
-  // 이상 신고 모달 상태
-  const [flagModal, setFlagModal]   = useState(null)  // null | verifiedRecord
+  const [flagModal, setFlagModal]   = useState(null)
   const [flagReason, setFlagReason] = useState('')
   const [flagNote, setFlagNote]     = useState('')
 
-  // Load point balance from API on mount
+  // 포인트 잔액 + 동의 목록 API 로드
   useEffect(() => {
+    const userId = localStorage.getItem('userId')
+
     async function loadBalance() {
       try {
-        const userId = localStorage.getItem('userId')
         if (!userId) return
         const data = await apiFetch(`/insurers/${userId}/points/balance`)
-        if (data && data.balance !== undefined) {
-          setState(s => ({ ...s, ptBalance: data.balance }))
-        }
-      } catch {
-        // Fall back to existing mock balance
-      }
+        if (data?.balance !== undefined) setState(s => ({ ...s, ptBalance: data.balance }))
+      } catch { /* 폴백 */ }
     }
+
+    async function loadConsents() {
+      try {
+        const data = await apiFetch(`/consents${userId ? `?insurerId=${userId}` : ''}`)
+        if (data && Array.isArray(data)) {
+          const map = {}
+          data.forEach(c => {
+            map[c.recordId] = {
+              recordId:    c.recordId,
+              consentId:   c.consentId || c.id,
+              petId:       c.petId,
+              status:      (c.status || 'pending').toLowerCase(),
+              pet:         c.petName || c.pet || '',
+              hospital:    c.hospitalName || c.hospital || '',
+              insurerName: c.insurerName || '',
+              insurerId:   c.insurerId || userId || '',
+              disease:     c.disease || '',
+              treatment:   c.treatment || '',
+              cost:        c.cost || 0,
+              date:        c.date || '',
+            }
+          })
+          setState(s => ({ ...s, consents: map }))
+        }
+      } catch { /* 폴백 */ }
+    }
+
     loadBalance()
+    loadConsents()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeConsents  = Object.values(state.consents).filter(c => c.status === 'active')
@@ -449,6 +503,62 @@ export default function InsuranceDash({ showToast, onLogout }) {
                     <td>—</td>
                     <td>플랫폼 발행</td>
                     <td style={{ color: 'var(--brand)', fontWeight: 700 }}>+1,000</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── 채널 현황 ── */}
+        {tab === 'channel' && (
+          <div className="fade-in">
+            <div className="pane-h">채널 현황</div>
+            <div className="pane-sub">현재 참여 중인 하이퍼레저 패브릭 채널 구성</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+              {CHANNEL_INFO.map(ch => (
+                <div key={ch.id} className="card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{ch.name}</div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, color: ch.badgeColor,
+                      background: ch.badgeColor + '18', padding: '3px 10px',
+                      borderRadius: 20, border: `1px solid ${ch.badgeColor}44`,
+                    }}>{ch.badge}</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.65 }}>{ch.desc}</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {ch.members.map((m, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 13px', background: 'var(--bg-2)', borderRadius: 9 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, flex: 1 }}>{m.label}</span>
+                        <span style={{ fontSize: 11, color: m.dot, fontWeight: 600 }}>{m.role}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="card">
+              <div className="card-title">채널별 검증 통계 (이번 세션)</div>
+              <table className="tbl">
+                <thead>
+                  <tr><th>채널</th><th>총 기록 수</th><th>검증 완료</th><th>대기 중</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>수의사회 채널</td>
+                    <td>{Object.values(state.consents).filter(c => !c.isIndependent).length}</td>
+                    <td style={{ color: 'var(--success)', fontWeight: 700 }}>{state.verifiedRecords.length}</td>
+                    <td>{Object.values(state.consents).filter(c => c.status === 'active').length}</td>
+                  </tr>
+                  <tr>
+                    <td>대형병원 독립 채널</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
                   </tr>
                 </tbody>
               </table>
