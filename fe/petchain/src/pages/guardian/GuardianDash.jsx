@@ -5,37 +5,8 @@ import apiFetch from '../../api/client'
 
 /* ─── CSS ───────────────────────────────────────────────────────── */
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600&display=swap');
-
-:root {
-  --font: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
-  --mono: 'SF Mono', 'Fira Mono', monospace;
-  --bg: #f2f2f0;
-  --bg-2: #eaeae7;
-  --surface: #ffffff;
-  --border: #e2e2dd;
-  --border-d: #c8c8c0;
-  --text: #1a1a18;
-  --text-2: #5a5a55;
-  --muted: #98988f;
-  --muted-l: #c8c8c0;
-  --brand: #2563eb;
-  --brand-l: #bfdbfe;
-  --brand-xl: #eff6ff;
-  --success: #16a34a;
-  --success-xl: #f0fdf4;
-  --warning: #d97706;
-  --warning-xl: #fffbeb;
-  --danger: #dc2626;
-  --danger-xl: #fef2f2;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
-  --shadow-md: 0 2px 8px rgba(0,0,0,0.07);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
-}
-
 /* ── 레이아웃 ── */
-body { font-family: var(--font) !important; background: var(--bg) !important; color: var(--text) !important; }
-.gd-shell { display: flex; height: 100vh; overflow: hidden; font-family: var(--font); }
+.gd-shell { display: flex; height: 100vh; overflow: hidden; font-family: var(--font-sans); }
 
 /* ── 사이드바 ── */
 .gd-sidebar {
@@ -45,7 +16,7 @@ body { font-family: var(--font) !important; background: var(--bg) !important; co
   display: flex; flex-direction: column;
 }
 .gd-logo { padding: 22px 20px 18px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
-.gd-logo-name { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--text); }
+.gd-logo-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; color: var(--text); }
 .gd-logo-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .gd-nav { padding: 0 8px; flex: 1; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .gd-nav-item {
@@ -53,134 +24,20 @@ body { font-family: var(--font) !important; background: var(--bg) !important; co
   padding: 9px 12px; border-radius: 8px;
   font-size: 14px; color: var(--text-2);
   cursor: pointer; border: none; background: transparent;
-  width: 100%; text-align: left; font-family: var(--font);
-  transition: background 0.1s, color 0.1s;
+  width: 100%; text-align: left; font-family: var(--font-sans);
+  transition: background 0.15s, color 0.15s;
 }
-.gd-nav-item:hover { background: var(--bg); color: var(--text); }
-.gd-nav-item.active { background: var(--bg); color: var(--text); font-weight: 500; }
+.gd-nav-item:hover { background: var(--brand-xl); color: var(--text); }
+.gd-nav-item.active { background: var(--brand-xl); color: var(--brand); font-weight: 600; }
 .gd-nav-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
 .gd-bottom { padding: 16px 20px; border-top: 1px solid var(--border); }
 .gd-user-name { font-size: 14px; font-weight: 600; color: var(--text); }
 .gd-user-region { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.gd-logout { font-size: 12px; color: var(--muted); cursor: pointer; margin-top: 8px; border: none; background: none; font-family: var(--font); padding: 0; transition: color 0.1s; }
+.gd-logout { font-size: 12px; color: var(--muted); cursor: pointer; margin-top: 8px; border: none; background: none; font-family: var(--font-sans); padding: 0; transition: color 0.1s; }
 .gd-logout:hover { color: var(--danger); }
 
 /* ── 메인 ── */
 .gd-main { flex: 1; overflow-y: auto; padding: 36px 40px; background: var(--bg); }
-
-/* ── 헤딩 ── */
-.pane-h { font-size: 24px !important; font-weight: 600 !important; letter-spacing: -0.5px !important; color: var(--text) !important; margin-bottom: 6px !important; }
-.pane-sub { font-size: 15px !important; color: var(--text-2) !important; font-weight: 400 !important; margin-bottom: 24px !important; }
-
-/* ── 카드 ── */
-.card {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 14px !important;
-  box-shadow: none !important;
-  padding: 22px !important;
-}
-
-/* ── stat-box ── */
-.stat-box {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 14px !important;
-  box-shadow: none !important;
-}
-.stat-n { font-size: 36px !important; font-weight: 500 !important; letter-spacing: -1.5px !important; }
-.stat-l { font-size: 14px !important; margin-top: 4px !important; }
-
-/* ── 버튼 ── */
-.btn {
-  font-family: var(--font) !important;
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  border-radius: 8px !important;
-  letter-spacing: -0.1px !important;
-}
-.btn-primary {
-  background: var(--text) !important;
-  color: #fff !important;
-  border-color: var(--text) !important;
-}
-.btn-primary:hover { background: #2e2e2e !important; }
-.btn-ghost {
-  background: transparent !important;
-  border: 1px solid var(--border) !important;
-  color: var(--text-2) !important;
-}
-.btn-ghost:hover { background: var(--bg) !important; color: var(--text) !important; border-color: var(--border-d) !important; }
-.btn-sm { font-size: 13px !important; padding: 6px 12px !important; }
-
-/* ── 배지 ── */
-.badge { font-size: 12px !important; font-weight: 500 !important; border-radius: 20px !important; padding: 3px 9px !important; }
-.badge-brand   { background: var(--brand-xl)   !important; color: var(--brand)   !important; }
-.badge-success { background: var(--success-xl) !important; color: var(--success) !important; }
-.badge-warning { background: var(--warning-xl) !important; color: var(--warning) !important; }
-.badge-danger  { background: var(--danger-xl)  !important; color: var(--danger)  !important; }
-.badge-muted   { background: var(--bg-2) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; }
-.badge-orange  { background: #fff7ed !important; color: #c2410c !important; }
-
-/* ── 테이블 ── */
-.tbl th { font-size: 13px !important; color: var(--muted) !important; font-weight: 500 !important; background: var(--bg) !important; }
-.tbl td { font-size: 15px !important; }
-.tbl tr:hover td { background: var(--bg) !important; }
-
-/* ── 폼 ── */
-.fi {
-  font-family: var(--font) !important;
-  font-size: 15px !important;
-  border: 1px solid var(--border) !important;
-  background: var(--bg) !important;
-  border-radius: 8px !important;
-  color: var(--text) !important;
-  padding: 10px 12px !important;
-}
-.fi:focus { border-color: var(--border-d) !important; background: var(--surface) !important; outline: none !important; }
-.fl { font-size: 13px !important; color: var(--text-2) !important; font-weight: 500 !important; margin-bottom: 6px !important; }
-
-/* ── 토글 ── */
-.toggle-slider { background: #d1d5db !important; }
-.toggle input:checked + .toggle-slider { background: var(--success) !important; }
-
-/* ── alert ── */
-.alert-info    { background: var(--brand-xl) !important; color: #1e40af !important; border: 1px solid var(--brand-l) !important; border-radius: 10px !important; font-size: 14px !important; }
-.alert-warning { background: var(--warning-xl) !important; border: 1px solid #fde68a !important; border-radius: 10px !important; font-size: 14px !important; }
-
-/* ── consent banners ── */
-.consent-active-banner  { background: var(--success-xl) !important; color: var(--success) !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important; }
-.consent-revoked-banner { background: var(--danger-xl)  !important; color: var(--danger)  !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important; }
-
-/* ── mono ── */
-.mono { font-family: var(--mono) !important; font-size: 12px !important; color: var(--text-2) !important; }
-
-/* ── divider ── */
-.divider { border: none !important; border-top: 1px solid var(--border) !important; margin: 14px 0 !important; }
-.row-flex { display: flex !important; justify-content: space-between !important; align-items: center !important; padding: 5px 0 !important; font-size: 15px !important; }
-
-/* ── upload-zone ── */
-.upload-zone { border: 1.5px dashed var(--border-d) !important; border-radius: 10px !important; font-size: 14px !important; color: var(--text-2) !important; }
-
-/* ── Overlay ── */
-.overlay-panel, [class*="overlay"] > div {
-  border-radius: 16px !important;
-  border: 1px solid var(--border) !important;
-  box-shadow: var(--shadow-lg) !important;
-  font-family: var(--font) !important;
-}
-
-/* ── fi-note ── */
-.fi-note { font-size: 13px !important; color: var(--muted) !important; }
-
-/* ── tl-row ── */
-.tl-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); }
-.tl-row:last-child { border-bottom: none; }
-.tl-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
-
-/* ── fade ── */
-@keyframes fadeUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-.fade-in { animation: fadeUp 0.18s ease; }
 `
 
 /* ─── 상수 ──────────────────────────────────────────────────────── */
@@ -293,7 +150,7 @@ function MonthPicker({ selectedYear, selectedMonth, onChange, onClear }) {
               const isSel = selectedYear===viewYear && selectedMonth===mon
               return (
                 <button key={mon} onClick={() => { isSel?onClear():onChange(viewYear,mon); setOpen(false) }}
-                  style={{ padding:'8px 4px', borderRadius:8, border:'none', cursor:'pointer', fontSize:14, fontWeight:isSel?600:400, background:isSel?'var(--brand)':'transparent', color:isSel?'#fff':'var(--text)', transition:'background .12s', fontFamily:'var(--font)' }}
+                  style={{ padding:'8px 4px', borderRadius:8, border:'none', cursor:'pointer', fontSize:14, fontWeight:isSel?600:400, background:isSel?'var(--brand)':'transparent', color:isSel?'#fff':'var(--text)', transition:'background .12s', fontFamily:'var(--font-sans)' }}
                   onMouseEnter={e => { if (!isSel) e.currentTarget.style.background='var(--brand-xl)' }}
                   onMouseLeave={e => { if (!isSel) e.currentTarget.style.background='transparent' }}
                 >{m}</button>
@@ -446,7 +303,7 @@ function RegionBanner({ userRegion, onSave }) {
     </div>
   )
   return (
-    <div style={{ padding:'24px 26px', borderRadius:16, marginBottom:24, background:'linear-gradient(135deg, #1d4ed8 0%, #2563eb 60%, #3b82f6 100%)', boxShadow:'0 4px 20px rgba(37,99,235,.2)' }}>
+    <div style={{ padding:'24px 26px', borderRadius:16, marginBottom:24, background:'linear-gradient(135deg, var(--brand-h) 0%, var(--brand) 60%, var(--brand-2) 100%)', boxShadow:'var(--shadow-brand)' }}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:16 }}>
         <div style={{ width:48, height:48, borderRadius:12, flexShrink:0, background:'rgba(255,255,255,.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24 }}>📍</div>
         <div style={{ flex:1 }}>
@@ -929,7 +786,7 @@ export default function GuardianDash({ showToast, onLogout }) {
         {/* ── 사이드바 ── */}
         <nav className="gd-sidebar">
           <div className="gd-logo">
-            <div className="gd-logo-name">PetChain</div>
+            <div className="gd-logo-name">🐾 Pet<span style={{color:'var(--brand)'}}>Chain</span></div>
             <div className="gd-logo-sub">반려동물 의료 플랫폼</div>
           </div>
           <div className="gd-nav">
