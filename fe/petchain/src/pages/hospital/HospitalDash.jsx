@@ -141,7 +141,7 @@ function OrgTab() {
   const orgName = localStorage.getItem('hospitalName') || '동물병원'
 
   const CH1_MEMBERS = [
-    { label: '한국수의사회', role: 'Orderer', color: '#a78bfa' },
+    { label: '한국수의사회', role: 'Orderer', color: '#b8885a' },
     { label: '중소동물병원 A', role: '병원', color: '#fb923c' },
     { label: '중소동물병원 B', role: '병원', color: '#fb923c' },
     { label: '중소동물병원 C', role: '병원', color: '#fb923c' },

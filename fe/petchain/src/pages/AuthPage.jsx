@@ -62,8 +62,8 @@ export default function AuthPage({ mode, onLogin, onBack }) {
   const [hPw, setHPw]       = useState('')
 
   const roles = [
-    { id: 'guardian', icon: '🐾', name: '보호자', desc: '반려동물 보험 청구' },
-    { id: 'hospital', icon: '🏥', name: '병원',   desc: '진료기록 관리' },
+    { id: 'guardian', icon: '01', name: '보호자', desc: '반려동물 보험 청구' },
+    { id: 'hospital', icon: '02', name: '병원',   desc: '진료기록 관리' },
   ]
 
   const btnClass = { guardian: 'btn-primary', hospital: 'btn-orange' }
@@ -151,37 +151,40 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       {/* Left panel */}
       <div className="auth-left">
         <div
-          style={{ fontSize: 18, fontWeight: 800, color: '#fff', cursor: 'pointer', marginBottom: 48 }}
+          style={{ fontSize: 19, fontWeight: 800, color: '#fff', cursor: 'pointer', marginBottom: 48, letterSpacing: '-.03em' }}
           onClick={onBack}
         >
-          🐾 Pet<span style={{ color: '#a5b4fc' }}>Chain</span>
+          PET<span style={{ color: '#b8885a' }}>CHAIN.</span>
         </div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#b8885a', letterSpacing: '.22em', textTransform: 'uppercase', marginBottom: 14 }}>
+          — Member Access
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 6, letterSpacing: '-.02em' }}>
           {mode === 'signup' ? '회원가입' : '로그인'}
         </div>
-        <div style={{ fontSize: 14, color: '#57534e', marginBottom: 28 }}>역할을 선택하세요</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, flex: 1 }}>
+        <div style={{ fontSize: 13.5, color: 'rgba(245,242,236,.5)', marginBottom: 32 }}>역할을 선택해주세요</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
           {roles.map(r => (
             <div
               key={r.id}
               className={`role-pill ${role === r.id ? 'sel' : ''}`}
               onClick={() => { setRole(r.id); setError('') }}
             >
-              <div style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{r.icon}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#b8885a', letterSpacing: '.14em', width: 28, textAlign: 'center' }}>{r.icon}</div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: '#57534e', marginTop: 2 }}>{r.desc}</div>
+                <div style={{ fontSize: 12, color: 'rgba(245,242,236,.5)', marginTop: 2 }}>{r.desc}</div>
               </div>
             </div>
           ))}
-          <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1px solid #292524' }}>
-            <div style={{ fontSize: 12, color: '#44403c', lineHeight: 1.6 }}>
+          <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1px solid rgba(245,242,236,.12)' }}>
+            <div style={{ fontSize: 12, color: 'rgba(245,242,236,.45)', lineHeight: 1.7 }}>
               보험사 · 플랫폼 관리자는<br />
-              <a href="/admin" style={{ color: '#a5b4fc', textDecoration: 'none', fontWeight: 600 }}>관리자 페이지</a>에서 로그인하세요
+              <a href="/admin" style={{ color: '#b8885a', textDecoration: 'none', fontWeight: 600 }}>관리자 페이지</a>에서 로그인하세요
             </div>
           </div>
         </div>
-        <div style={{ fontSize: 12, color: '#292524', marginTop: 24 }}>© 2024 PetChain Inc.</div>
+        <div style={{ fontSize: 11, color: 'rgba(245,242,236,.3)', marginTop: 24, letterSpacing: '.04em' }}>© 2024 PETCHAIN INC.</div>
       </div>
 
       {/* Right panel */}

@@ -1,4 +1,12 @@
-import { useState } from 'react'
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Generate Landing.jsx with GolfCC luxury-club design concept for PetChain."""
+
+import os
+
+OUT = r"C:\Users\ST-USER\Desktop\개발자 양성 교육\블록체인프로젝트(하이퍼)\pointpro\fe\petchain\src\pages\Landing.jsx"
+
+content = r'''import { useState } from 'react'
 
 /* ─ Palette · GolfCC luxe ───────────────────────────────────────────
    bg:        #f5f2ec   cream
@@ -385,7 +393,13 @@ const FAQ_DATA = [
   },
 ]
 
-
+const NAV_LINKS = [
+  { id: 'about', label: 'ABOUT' },
+  { id: 'roles', label: 'SERVICES' },
+  { id: 'network', label: 'NETWORK' },
+  { id: 'how', label: 'HOW IT WORKS' },
+  { id: 'faq', label: 'FAQ' },
+]
 
 export default function Landing({ onGoAuth }) {
   const [openFaq, setOpenFaq] = useState(null)
@@ -405,6 +419,9 @@ export default function Landing({ onGoAuth }) {
           PETCHAIN<span className="dot">.</span>
         </div>
         <nav className="lp-nav">
+          {NAV_LINKS.map(n => (
+            <a key={n.id} onClick={() => scrollTo(n.id)}>{n.label}</a>
+          ))}
         </nav>
         <div className="lp-hdr-cta">
           <button className="lp-btn-ghost" onClick={() => onGoAuth('login')}>로그인</button>
@@ -766,3 +783,10 @@ export default function Landing({ onGoAuth }) {
     </div>
   )
 }
+'''
+
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
+with open(OUT, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print(f"Wrote {OUT} ({len(content)} bytes)")

@@ -8,36 +8,37 @@ const CSS = `
 /* ── 레이아웃 ── */
 .gd-shell { display: flex; height: 100vh; overflow: hidden; font-family: var(--font-sans); }
 
-/* ── 사이드바 ── */
+/* ── 사이드바 (Forest dark) ── */
 .gd-sidebar {
-  width: 200px; flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  width: 220px; flex-shrink: 0;
+  background: #1e2a18;
+  border-right: 1px solid #2d3d25;
   display: flex; flex-direction: column;
 }
-.gd-logo { padding: 22px 20px 18px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
-.gd-logo-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; color: var(--text); }
-.gd-logo-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.gd-nav { padding: 0 8px; flex: 1; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.gd-logo { padding: 26px 22px 22px; border-bottom: 1px solid #2d3d25; margin-bottom: 10px; }
+.gd-logo-name { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; color: #f5f2ec; }
+.gd-logo-sub { font-size: 11px; color: #8aaa84; margin-top: 4px; letter-spacing: .04em; }
+.gd-nav { padding: 0 0 0 0; flex: 1; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .gd-nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px; border-radius: 8px;
-  font-size: 14px; color: var(--text-2);
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 22px; border-radius: 0;
+  font-size: 13.5px; color: rgba(245,242,236,.55);
   cursor: pointer; border: none; background: transparent;
   width: 100%; text-align: left; font-family: var(--font-sans);
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color .15s;
+  border-left: 3px solid transparent;
 }
-.gd-nav-item:hover { background: var(--brand-xl); color: var(--text); }
-.gd-nav-item.active { background: var(--brand-xl); color: var(--brand); font-weight: 600; }
-.gd-nav-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
-.gd-bottom { padding: 16px 20px; border-top: 1px solid var(--border); }
-.gd-user-name { font-size: 14px; font-weight: 600; color: var(--text); }
-.gd-user-region { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.gd-logout { font-size: 12px; color: var(--muted); cursor: pointer; margin-top: 8px; border: none; background: none; font-family: var(--font-sans); padding: 0; transition: color 0.1s; }
-.gd-logout:hover { color: var(--danger); }
+.gd-nav-item:hover { background: rgba(255,255,255,.07); color: #f5f2ec; }
+.gd-nav-item.active { background: rgba(255,255,255,.1); color: #f5f2ec; font-weight: 600; border-left: 3px solid #b8885a; }
+.gd-nav-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+.gd-bottom { padding: 18px 22px; border-top: 1px solid #2d3d25; }
+.gd-user-name { font-size: 14px; font-weight: 600; color: #f5f2ec; }
+.gd-user-region { font-size: 12px; color: #8aaa84; margin-top: 3px; }
+.gd-logout { font-size: 12px; color: #8aaa84; cursor: pointer; margin-top: 10px; border: none; background: none; font-family: var(--font-sans); padding: 0; transition: color 0.1s; }
+.gd-logout:hover { color: #f87171; }
 
 /* ── 메인 ── */
-.gd-main { flex: 1; overflow-y: auto; padding: 36px 40px; background: var(--bg); }
+.gd-main { flex: 1; overflow-y: auto; padding: 36px 40px; background: #f5f2ec; }
 `
 
 /* ─── 상수 ──────────────────────────────────────────────────────── */
@@ -665,10 +666,10 @@ function RankingTab() {
                     <>
                       <image href={photo} x={pin.x-R} y={pin.y-R} width={R*2} height={R*2}
                              clipPath={`url(#pinclip-${pin.label})`} preserveAspectRatio="xMidYMid slice"/>
-                      <circle cx={pin.x} cy={pin.y} r={R} fill="none" stroke={isSel?'var(--brand)':'#6366f1'} strokeWidth={isSel?3:2}/>
+                      <circle cx={pin.x} cy={pin.y} r={R} fill="none" stroke={isSel?'var(--brand)':'#b8885a'} strokeWidth={isSel?3:2}/>
                     </>
                   ) : (
-                    <circle cx={pin.x} cy={pin.y} r={R} fill={isSel?'var(--brand)':hasData?'#6366f1':'#94a3b8'} opacity={hasData?1:.55}/>
+                    <circle cx={pin.x} cy={pin.y} r={R} fill={isSel?'var(--brand)':hasData?'#b8885a':'#a09688'} opacity={hasData?1:.55}/>
                   )}
                   {hasData && (
                     <>
@@ -786,8 +787,8 @@ export default function GuardianDash({ showToast, onLogout }) {
         {/* ── 사이드바 ── */}
         <nav className="gd-sidebar">
           <div className="gd-logo">
-            <div className="gd-logo-name">🐾 Pet<span style={{color:'var(--brand)'}}>Chain</span></div>
-            <div className="gd-logo-sub">반려동물 의료 플랫폼</div>
+            <div className="gd-logo-name">PET<span style={{color:'#b8885a'}}>CHAIN.</span></div>
+            <div className="gd-logo-sub">GUARDIAN · MEMBER</div>
           </div>
           <div className="gd-nav">
             {NAV.map(n => (

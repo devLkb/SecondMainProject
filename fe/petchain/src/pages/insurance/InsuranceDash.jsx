@@ -21,7 +21,7 @@ const CHANNEL_INFO = [
     badgeColor: '#16a34a',
     desc: '한국수의사회 주관. 소속 중소 동물병원 3곳과 보험사 2곳이 참여합니다.',
     members: [
-      { label: '한국수의사회',   role: 'Orderer', dot: '#a78bfa' },
+      { label: '한국수의사회',   role: 'Orderer', dot: '#b8885a' },
       { label: '중소동물병원 A', role: '병원',    dot: '#fb923c' },
       { label: '중소동물병원 B', role: '병원',    dot: '#fb923c' },
       { label: '중소동물병원 C', role: '병원',    dot: '#fb923c' },

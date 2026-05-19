@@ -71,9 +71,9 @@ export default function Platform({ showToast, onLogout }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <div className="pnav">
-        <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', paddingRight: 24, marginRight: 8, borderRight: '1px solid #2d2d3d' }}>
-          🐾 Pet<span style={{ color: '#818cf8' }}>Chain</span>
-          <span style={{ marginLeft: 10, fontSize: 11, background: '#312e81', color: '#818cf8', padding: '2px 10px', borderRadius: 20, fontWeight: 700 }}>ADMIN</span>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', paddingRight: 24, marginRight: 8, borderRight: '1px solid #2d3d25', letterSpacing: '-.03em' }}>
+          PET<span style={{ color: '#b8885a' }}>CHAIN.</span>
+          <span style={{ marginLeft: 12, fontSize: 10, background: 'rgba(184,136,90,.18)', color: '#e8d4b8', padding: '3px 10px', borderRadius: 20, fontWeight: 700, letterSpacing: '.14em' }}>ADMIN</span>
         </div>
         {tabs.map(t => (
           <button key={t.id} className={`pni ${tab === t.id ? 'on' : ''}`} onClick={() => setTab(t.id)}>
@@ -86,8 +86,8 @@ export default function Platform({ showToast, onLogout }) {
           </button>
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ fontSize: 13, color: '#6b7280' }}>platform-admin</span>
-          <button className="btn btn-ghost btn-sm" style={{ color: '#6b7280', borderColor: '#2d2d3d', background: 'transparent' }} onClick={onLogout}>
+          <span style={{ fontSize: 13, color: '#8aaa84' }}>platform-admin</span>
+          <button className="btn btn-ghost btn-sm" style={{ color: '#8aaa84', borderColor: '#2d3d25', background: 'transparent' }} onClick={onLogout}>
             로그아웃
           </button>
         </div>

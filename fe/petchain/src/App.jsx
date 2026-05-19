@@ -86,35 +86,35 @@ function AdminLogin({ onLogin }) {
 
   const inp = {
     width: '100%', padding: '12px 14px', borderRadius: 10,
-    border: '1.5px solid #334155', background: '#0f172a', color: '#f1f5f9',
+    border: '1.5px solid #2d3d25', background: '#0f1a0d', color: '#f5f2ec',
     fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a' }}>
-      <div style={{ background: '#1e293b', borderRadius: 16, padding: '44px 40px', width: '100%', maxWidth: 400, boxShadow: '0 24px 64px rgba(0,0,0,.6)' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f1a0d' }}>
+      <div style={{ background: '#1a2a16', borderRadius: 16, padding: '44px 40px', width: '100%', maxWidth: 400, boxShadow: '0 24px 64px rgba(0,0,0,.6)' }}>
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 6, letterSpacing: '-.02em' }}>
-            Pet<span style={{ color: '#818cf8' }}>Chain</span>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#f5f2ec', marginBottom: 8, letterSpacing: '-.02em' }}>
+            PET<span style={{ color: '#b8885a' }}>CHAIN.</span>
           </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>관리자 · 보험사 로그인</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#8aaa84', letterSpacing: '.16em', textTransform: 'uppercase' }}>Admin · Insurance Access</div>
         </div>
 
         {error && (
-          <div style={{ marginBottom: 18, padding: '10px 14px', borderRadius: 8, background: '#450a0a', color: '#fca5a5', fontSize: 13 }}>
+          <div style={{ marginBottom: 18, padding: '10px 14px', borderRadius: 8, background: '#3a1414', color: '#fca5a5', fontSize: 13 }}>
             {error}
           </div>
         )}
 
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Org ID</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#8aaa84', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Org ID</label>
           <input style={inp} placeholder="org-id" value={loginId}
             onChange={e => setLoginId(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()} />
         </div>
 
         <div style={{ marginBottom: 28 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>비밀번호</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#8aaa84', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>비밀번호</label>
           <input type="password" style={inp} placeholder="••••••••" value={loginPw}
             onChange={e => setLoginPw(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()} />
@@ -125,7 +125,7 @@ function AdminLogin({ onLogin }) {
           disabled={loading}
           style={{
             width: '100%', padding: 13, borderRadius: 10, border: 'none',
-            background: loading ? '#334155' : '#4f46e5', color: '#fff',
+            background: loading ? '#2d3d25' : '#3d5a3a', color: '#fff',
             fontSize: 14, fontWeight: 700, cursor: loading ? 'default' : 'pointer',
             fontFamily: 'inherit', transition: 'background .2s',
           }}
@@ -134,7 +134,7 @@ function AdminLogin({ onLogin }) {
         </button>
 
         <div style={{ textAlign: 'center', marginTop: 22 }}>
-          <a href="/" style={{ fontSize: 13, color: '#475569', textDecoration: 'none' }}>← 메인으로 돌아가기</a>
+          <a href="/" style={{ fontSize: 13, color: '#8aaa84', textDecoration: 'none' }}>← 메인으로 돌아가기</a>
         </div>
       </div>
     </div>
