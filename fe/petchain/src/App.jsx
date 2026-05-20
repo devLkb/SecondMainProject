@@ -78,6 +78,14 @@ function AdminLogin({ onLogin }) {
       localStorage.setItem('userId', String(data.userId ?? ''))
       localStorage.setItem('memberNumber', data.memberNumber || '')
       const role = ROLE_MAP[data.memberType?.toUpperCase()] || 'platform'
+      if (role !== 'platform' && role !== 'insurance') {
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('memberType')
+        localStorage.removeItem('userId')
+        localStorage.removeItem('memberNumber')
+        throw new Error('관리자·보험사 전용 페이지입니다.')
+      }
       onLogin(role)
     } catch (e) {
       setError(e.message)
@@ -174,7 +182,16 @@ function Inner() {
 
   const handleLogin = (selectedRole) => {
     setRole(selectedRole)
-    // 보호자는 랜딩이 홈, 병원·보험사·플랫폼은 전용 대시보드
+    if (selectedRole === 'guardian') {
+      const pendingTab = localStorage.getItem('petchain_pending_tab')
+      localStorage.removeItem('petchain_pending_tab')
+      if (pendingTab) {
+        setInitialTab(pendingTab)
+        setPage('main')
+        window.history.pushState({ page: 'main', role: selectedRole }, '', window.location.pathname)
+        return
+      }
+    }
     const targetPage = selectedRole === 'guardian' ? 'landing' : 'main'
     setPage(targetPage)
     window.history.pushState({ page: targetPage, role: selectedRole }, '', window.location.pathname)

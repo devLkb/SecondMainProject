@@ -451,8 +451,11 @@ export default function Landing({ onGoAuth, role, onGoMain, onLogout }) {
             우리 동네 반려동물 이야기를 모아 지역 랭킹을 만듭니다.
             지역 주민만 추천할 수 있는 진짜 동네 커뮤니티.
           </p>
-          <button className="lp-hero-cta" onClick={() => onGoAuth('signup')}>
-            보호자로 시작하기 <span style={{fontSize:'14px'}}>→</span>
+          <button className="lp-hero-cta" onClick={() => {
+            if (role === 'guardian') { onGoMain('community') }
+            else { localStorage.setItem('petchain_pending_tab', 'community'); onGoAuth('login') }
+          }}>
+            커뮤니티 이동하기 <span style={{fontSize:'14px'}}>→</span>
           </button>
         </div>
 
@@ -464,8 +467,11 @@ export default function Landing({ onGoAuth, role, onGoMain, onLogout }) {
             진료기록은 해시로 원장에 기록되고, 보호자 동의가 있는 건만 보험사가 검증합니다.
             서류 위·변조와 중복 청구를 구조적으로 차단합니다.
           </p>
-          <button className="lp-hero-cta lp-hero-cta-gold" onClick={() => scrollTo('how')}>
-            작동 원리 보기 <span style={{fontSize:'14px'}}>→</span>
+          <button className="lp-hero-cta lp-hero-cta-gold" onClick={() => {
+            if (role === 'guardian') { onGoMain('home') }
+            else { localStorage.setItem('petchain_pending_tab', 'home'); onGoAuth('login') }
+          }}>
+            보험 등록하기 <span style={{fontSize:'14px'}}>→</span>
           </button>
         </div>
 
@@ -760,7 +766,7 @@ export default function Landing({ onGoAuth, role, onGoMain, onLogout }) {
             <div className="lp-footer-col-h">Service</div>
             <a onClick={() => onGoAuth('signup')}>보호자 가입</a>
             <a onClick={() => onGoAuth('signup')}>병원 등록</a>
-            <a href="/admin">관리자 로그인</a>
+            <a onClick={() => onGoAuth('login')}>보험사 로그인</a>
           </div>
           <div className="lp-footer-col">
             <div className="lp-footer-col-h">Network</div>
