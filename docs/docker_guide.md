@@ -29,13 +29,13 @@ mysql (MySQL 8.0, mysql_data 볼륨)
 
 ## 2. 주요 파일
 
-| 파일 | 역할 |
-| --- | --- |
-| `docker-compose.yml` | AWS EC2 Compose 기준 컨테이너, 포트, 볼륨, 환경 변수 구성 |
-| `.env.example` | 배포 환경 변수 템플릿 |
-| `be/backend/Dockerfile` | Spring Boot JAR 빌드 및 JRE 런타임 이미지 생성 |
-| `fe/petchain/Dockerfile` | React 빌드 후 Nginx 이미지로 정적 파일 패키징 |
-| `fe/petchain/nginx.conf` | SPA fallback 및 `/api` 프록시 설정 |
+| 파일                     | 역할                                                      |
+| ------------------------ | --------------------------------------------------------- |
+| `docker-compose.yml`     | AWS EC2 Compose 기준 컨테이너, 포트, 볼륨, 환경 변수 구성 |
+| `.env.example`           | 배포 환경 변수 템플릿                                     |
+| `be/backend/Dockerfile`  | Spring Boot JAR 빌드 및 JRE 런타임 이미지 생성            |
+| `fe/petchain/Dockerfile` | React 빌드 후 Nginx 이미지로 정적 파일 패키징             |
+| `fe/petchain/nginx.conf` | SPA fallback 및 `/api` 프록시 설정                        |
 
 ## 3. AWS EC2 준비
 
@@ -43,13 +43,13 @@ EC2 인스턴스에는 Docker와 Docker Compose 플러그인을 설치하고, �
 
 Security Group은 최소한 다음 원칙을 따른다.
 
-| 포트 | 공개 대상 | 용도 |
-| --- | --- | --- |
-| 22 | 관리자 IP만 | SSH 접속 |
-| 80 또는 `APP_PORT` | 인터넷 또는 ALB | 프론트엔드 HTTP 진입점 |
-| 443 | ALB/프록시 사용 시 인터넷 | HTTPS 진입점 |
-| 8080 | 공개 금지 | Compose 내부 백엔드 전용 |
-| 3306 | 공개 금지 | Compose 내부 MySQL 전용 |
+| 포트               | 공개 대상                 | 용도                     |
+| ------------------ | ------------------------- | ------------------------ |
+| 22                 | 관리자 IP만               | SSH 접속                 |
+| 80 또는 `APP_PORT` | 인터넷 또는 ALB           | 프론트엔드 HTTP 진입점   |
+| 443                | ALB/프록시 사용 시 인터넷 | HTTPS 진입점             |
+| 8080               | 공개 금지                 | Compose 내부 백엔드 전용 |
+| 3306               | 공개 금지                 | Compose 내부 MySQL 전용  |
 
 고정 접속 주소가 필요하면 Elastic IP나 Route 53 도메인을 EC2 또는 ALB에 연결한다.
 
@@ -69,6 +69,42 @@ cp .env.example .env
 - `FRONTEND_URL`: OAuth 성공 후 돌아갈 공개 프론트엔드 URL
 - `CORS_ALLOWED_ORIGINS`: 공개 프론트엔드 origin 목록
 - `*_REDIRECT_URI`: OAuth 제공자 콘솔에 등록한 callback URL
+
+# 4-1 변경하는 이유
+
+• AWS 운영 배포에서 기본값/로컬값 그대로 쓰면 보안·인증·접속 경로가 깨지기 때문
+입니다.
+
+- DB_PASSWORD
+  - MySQL root 비밀번호입니다.
+  - 기본값이나 약한 값이면 DB 전체가 위험합니다.
+  - 특히 EC2 내부 컨테이너라도 서버 침해 시 바로 DB 접근이 가능합니다.
+- ADMIN_PASSWORD
+  - 플랫폼 관리자 초기 계정 비밀번호입니다.
+  - 기본값이면 누구나 관리자 권한을 탈취할 수 있습니다.
+  - 코드에도 prod 프로파일에서 기본 관리자 비밀번호 사용 시 부팅 실패하도록
+    방어 로직이 있습니다.
+- JWT_SECRET
+  - 로그인 토큰 서명에 쓰입니다.
+  - 짧거나 예측 가능한 값이면 공격자가 JWT를 위조할 수 있습니다.
+  - 그래서 32바이트 이상 랜덤 문자열이 필요합니다.
+- FRONTEND_URL
+  - OAuth 로그인 성공 후 사용자를 돌려보낼 공개 프론트엔드 주소입니다.
+  - localhost로 남아 있으면 AWS 배포 환경에서 사용자가 로그인 후 자기 PC의
+    localhost로 이동해 실패합니다.
+- CORS_ALLOWED_ORIGINS
+  - 브라우저가 백엔드 API 호출을 허용할 프론트엔드 origin 목록입니다.
+  - 운영 도메인으로 맞추지 않으면 프론트에서 API 호출이 CORS 오류로 막힐 수
+    있습니다.
+  - 너무 넓게 열면 보안 위험이 커집니다.
+- \*\_REDIRECT_URI
+  - Google/Naver/Kakao OAuth 제공자에 등록하는 콜백 주소입니다.
+  - 실제 AWS 공개 도메인과 정확히 일치해야 OAuth 인증이 성공합니다.
+  - localhost나 다른 주소로 남아 있으면 provider가 redirect를 거부하거나 로
+    그인 흐름이 깨집니다.
+
+즉, 앞의 3개는 보안상 필수, 뒤의 3개는 AWS 공개 주소에서 로그인/API가 정상 동
+작하기 위해 필수입니다.
 
 AWS 도메인이 `https://petchain.example.com`이면 다음 값들이 같은 공개 주소를 기준으로 맞아야 한다.
 
@@ -130,11 +166,11 @@ docker compose down -v
 
 ## 6. 포트와 접근 경로
 
-| 대상 | 기본 접근 |
-| --- | --- |
+| 대상       | 기본 접근                                                                             |
+| ---------- | ------------------------------------------------------------------------------------- |
 | 프론트엔드 | `http://<EC2 Public IP 또는 도메인>` (`APP_PORT`가 80이 아닐 경우 `:<APP_PORT>` 포함) |
-| 백엔드 API | 브라우저 기준 `/api/...` |
-| MySQL | Compose 내부 `mysql:3306` |
+| 백엔드 API | 브라우저 기준 `/api/...`                                                              |
+| MySQL      | Compose 내부 `mysql:3306`                                                             |
 
 백엔드와 MySQL은 호스트 포트로 공개하지 않는다. 운영 중 DB를 직접 확인해야 하면 SSH로 EC2에 접속한 뒤 다음처럼 Compose 내부에서 실행한다.
 
