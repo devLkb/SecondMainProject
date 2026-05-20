@@ -105,6 +105,40 @@ public class PlatformAdminService {
         throw new ApiException(ApiErrorCode.RESOURCE_NOT_FOUND, "Org를 찾을 수 없습니다.");
     }
 
+    // active 인 org 를 다시 승인 대기(pending) 상태로 되돌린다. user.status 를 SUSPENDED 로 바꿔
+    // 해당 계정의 신규 로그인/세션도 막는다. 재활성화는 기존 approveOrg 로 처리한다.
+    @Transactional
+    public PlatformDtos.OrgResponse deactivateOrg(ApiActor actor, String orgId) {
+        support.requireAdmin(actor);
+        if (orgId != null && orgId.startsWith("H-")) {
+            Hospital hospital = hospitalRepository.findAll().stream()
+                    .filter(h -> Objects.equals(h.getMemberNumber(), orgId))
+                    .findFirst()
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.HOSPITAL_INVALID, "병원을 찾을 수 없습니다."));
+            hospital.setIsActive(false);
+            suspendUser(hospital.getUser());
+            return new PlatformDtos.OrgResponse(hospital.getMemberNumber(), hospital.getName(), "병원",
+                    hospital.getFabricOrgId(), formatDate(hospital.getCreatedAt()), "pending",
+                    null, null);
+        }
+        if (orgId != null && orgId.startsWith("P-")) {
+            InsuranceCompany company = insuranceCompanyRepository.findAll().stream()
+                    .filter(c -> Objects.equals(c.getMemberNumber(), orgId))
+                    .findFirst()
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.INSURER_INVALID, "보험사를 찾을 수 없습니다."));
+            company.setIsActive(false);
+            suspendUser(company.getUser());
+            int balance = pointBalanceRepository
+                    .findByOwnerTypeAndOwnerId(DomainValues.PointOwnerType.INSURANCE, company.getId())
+                    .map(b -> b.getBalance() == null ? 0 : b.getBalance())
+                    .orElse(0);
+            return new PlatformDtos.OrgResponse(company.getMemberNumber(), company.getName(), "보험사",
+                    company.getFabricOrgId(), formatDate(company.getCreatedAt()), "pending",
+                    balance, 0);
+        }
+        throw new ApiException(ApiErrorCode.RESOURCE_NOT_FOUND, "Org를 찾을 수 없습니다.");
+    }
+
     @Transactional(readOnly = true)
     public PlatformDtos.MonitorResponse monitor(ApiActor actor) {
         support.requireAdmin(actor);
@@ -128,6 +162,13 @@ public class PlatformAdminService {
     private void activateUser(User user) {
         if (user != null) {
             user.setStatus(DomainValues.AccountStatus.ACTIVE);
+            userRepository.save(user);
+        }
+    }
+
+    private void suspendUser(User user) {
+        if (user != null) {
+            user.setStatus(DomainValues.AccountStatus.SUSPENDED);
             userRepository.save(user);
         }
     }

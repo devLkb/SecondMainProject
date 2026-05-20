@@ -43,9 +43,12 @@ public class VerificationService implements VerificationApiPort {
             throw ApiException.validation("recordId가 제출 건과 일치하지 않습니다.", java.util.Map.of("recordId", request.recordId()));
         }
 
-        // Idempotent: 이미 verified 상태이면 가장 최근의 성공 verification_log 를 그대로 돌려준다.
+        // Idempotent: 이미 verified 이고 동의가 여전히 active 일 때만 기존 verification_log 를 그대로 돌려준다.
         // 같은 record 에 verify 가 N번 호출되어도 포인트가 한 번만 차감되도록 한다.
-        if ("verified".equalsIgnoreCase(claim.getClaimStatus())) {
+        // consent 가 revoked 면 아래 일반 분기로 떨어져서 consent_revoked 로그를 새로 남기고 BLOCKED 응답을 낸다
+        // (이전 PASSED 응답을 재사용하면 보호자 동의 철회 후에도 비식별 데이터가 누출됨).
+        if ("verified".equalsIgnoreCase(claim.getClaimStatus())
+                && "active".equalsIgnoreCase(claim.getConsentStatus())) {
             VerificationLog existing = verificationLogRepository.findByClaimPackage_Id(claim.getId()).stream()
                     .filter(log -> "verified".equalsIgnoreCase(log.getResult()))
                     .max(java.util.Comparator.comparing(VerificationLog::getRequestedAt))
