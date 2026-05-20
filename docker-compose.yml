@@ -1,21 +1,19 @@
-version: '3.8'
-
 services:
   mysql:
     image: mysql:8.0
     container_name: petchain-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-1234}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the project .env file}
       MYSQL_DATABASE: ${DB_NAME:-petchain}
       TZ: Asia/Seoul
-    ports:
-      - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p${DB_PASSWORD:-1234}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -26,32 +24,52 @@ services:
       context: ./be/backend
       dockerfile: Dockerfile
     container_name: petchain-backend
-    ports:
-      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+    expose:
+      - "8080"
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-petchain}
       DB_USERNAME: ${DB_USERNAME:-root}
-      DB_PASSWORD: ${DB_PASSWORD:-1234}
-      JWT_SECRET: ${JWT_SECRET:-petchain-jwt-secret-key-must-be-at-least-256-bits-long-for-hs256-algo}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the project .env file}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the project .env file}
       JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-3600000}
       JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-604800000}
-      SERVER_PORT: ${SERVER_PORT:-8080}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      SERVER_PORT: 8080
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+      ADMIN_LOGIN_ID: ${ADMIN_LOGIN_ID:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in the project .env file}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/api/auth/oauth/google/callback}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost/api/auth/oauth/google/callback}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
-      NAVER_REDIRECT_URI: ${NAVER_REDIRECT_URI:-http://localhost:8080/api/auth/oauth/naver/callback}
+      NAVER_REDIRECT_URI: ${NAVER_REDIRECT_URI:-http://localhost/api/auth/oauth/naver/callback}
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
-      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-http://localhost:8080/api/auth/oauth/kakao/callback}
+      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-http://localhost/api/auth/oauth/kakao/callback}
     depends_on:
       mysql:
         condition: service_healthy
-    restart: on-failure
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./fe/petchain
+      dockerfile: Dockerfile
+    container_name: petchain-frontend
+    ports:
+      - "${APP_PORT:-80}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   mysql_data:

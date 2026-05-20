@@ -53,6 +53,15 @@
 
 블록체인 기반 펫보험 진료기록 검증 인프라
 
+## Docker Compose 실행
+
+프론트엔드(Nginx), 백엔드(Spring Boot), MySQL을 함께 배포하려면 최상위 `.env.example`을 `.env`로 복사해 비밀값과 공개 URL을 채운 뒤 실행한다. 전체 구조와 운영 명령은 [`docker_guide.md`](docker_guide.md)를 기준으로 한다.
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
 ## 프로젝트 목적
 
 PetChain은 반려동물 보험 청구 과정에서 발생하는 진료기록 신뢰성 문제를 해결하기 위한 프로젝트입니다.

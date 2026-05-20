@@ -66,6 +66,7 @@ vite.svg
 # --- Local docs / design files (README.md 제외) ---
 *.md
 !README.md
+!docker_guide.md
 !chaincode/petchain/DEPLOY_DEMO.md
 *.html
 
