@@ -1,0 +1,1 @@
+- [Deferred security items](deferred-security-items.md) — 2026-05-18 보안 리뷰에서 보류된 항목(토큰 URL 노출, PII 암호화, Redis state, enum 중앙화)

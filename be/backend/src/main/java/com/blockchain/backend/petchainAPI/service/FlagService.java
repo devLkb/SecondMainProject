@@ -4,6 +4,7 @@ import com.blockchain.backend.petchainAPI.dto.flag.FlagDtos;
 import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
 import com.blockchain.backend.petchainAPI.error.ApiException;
 import com.blockchain.backend.petchainAPI.security.ApiActor;
+import com.blockchain.backend.petchainDB.entity.InsuranceCompany;
 import com.blockchain.backend.petchainDB.entity.RecordFlag;
 import com.blockchain.backend.petchainDB.repository.MedicalRecordRepository;
 import com.blockchain.backend.petchainDB.repository.RecordFlagRepository;
@@ -37,13 +38,27 @@ public class FlagService {
 
     @Transactional
     public FlagDtos.FlagResponse createFlag(ApiActor actor, FlagDtos.CreateFlagRequest request) {
+        // 신고는 보험사만 생성 가능. actor 가 보험사가 아니면 여기서 차단된다.
+        InsuranceCompany insurer = support.insurerByActor(actor);
+        support.requireInsurerScope(actor, insurer);
+
+        // 같은 보험사가 같은 record 에 대해 미처리(PENDING) 신고를 또 만드는 것을 차단.
+        if (recordFlagRepository.existsByRecordIdAndReportedByInsurerIdAndStatus(
+                request.recordId(), insurer.getId(), "PENDING")) {
+            throw new ApiException(ApiErrorCode.VALIDATION_FAILED, "이미 검토 대기 중인 신고가 있습니다.");
+        }
+
+        // verificationId 가 진짜 BE 발급 형식(VER-<숫자>)이 아니면 저장하지 않는다.
+        // FE 로컬 폴백에서 만든 가짜 verificationId 가 DB 에 들어가는 것을 막는다.
+        String verificationId = isRealVerificationId(request.verificationId()) ? request.verificationId() : null;
+
         RecordFlag flag = new RecordFlag();
         flag.setRecordId(request.recordId());
-        flag.setVerificationId(request.verificationId());
+        flag.setVerificationId(verificationId);
         flag.setReasonCode(request.reasonCode());
         flag.setNote(request.note());
         flag.setStatus("PENDING");
-        flag.setReportedByInsurerId(support.parseActorUserId(actor));
+        flag.setReportedByInsurerId(insurer.getId());
 
         // 진료기록이 DB에 있으면 펫/병원/질병/진료비를 스냅샷으로 저장한다.
         medicalRecordRepository.findByRecordId(request.recordId()).ifPresent(record -> {
@@ -58,10 +73,17 @@ public class FlagService {
     }
 
     @Transactional(readOnly = true)
-    public List<FlagDtos.FlagResponse> listFlags() {
+    public List<FlagDtos.FlagResponse> listFlags(ApiActor actor) {
+        // 전체 신고 목록은 플랫폼 관리자만 조회 가능.
+        support.requireAdmin(actor);
         return recordFlagRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    // BE 가 발급한 verificationId 만 "VER-숫자" 형식. FE 폴백은 "VER-XXXXXXXX" hex.
+    private static boolean isRealVerificationId(String value) {
+        return value != null && value.matches("^VER-\\d+$");
     }
 
     @Transactional

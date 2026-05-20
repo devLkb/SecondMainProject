@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import DashNav from '../../components/common/DashNav'
 import { useApp } from '../../context/AppContext'
 import apiFetch from '../../api/client'
@@ -12,6 +12,18 @@ const FLAG_REASONS = [
   { code: 'DOCUMENT_SUSPICIOUS',    label: '서류 위조 의심' },
   { code: 'OTHER',                  label: '기타' },
 ]
+
+// BE 가 내려주는 failureReasons 코드(verification_log.result) → 한국어 라벨
+const FAILURE_LABEL = {
+  hash_mismatch:   '진료기록 해시 불일치 — 원문이 변조되었거나 동의 시점과 다릅니다.',
+  consent_revoked: '동의가 철회되어 검증할 수 없습니다.',
+  duplicate:       '중복된 검증 요청입니다.',
+  error:           '내부 오류로 검증에 실패했습니다.',
+}
+function failureReasonLabel(reasons) {
+  if (!reasons || reasons.length === 0) return '검증에 실패했습니다.'
+  return FAILURE_LABEL[reasons[0]] || `검증 실패 (${reasons[0]})`
+}
 
 const CHANNEL_INFO = [
   {
@@ -50,6 +62,8 @@ export default function InsuranceDash({ showToast, onLogout }) {
   useEffect(() => { localStorage.setItem('petchain_insurance_tab', tab) }, [tab])
   const [lastVerified, setLastVerified] = useState(null)
   const [ptTx, setPtTx] = useState([])
+  // handleVerify in-flight 가드: 같은 record 에 대해 동시에 두 번 호출되는 것을 방지.
+  const verifyingRef = useRef(new Set())
 
   const [flagModal, setFlagModal]   = useState(null)
   const [flagReason, setFlagReason] = useState('')
@@ -116,54 +130,92 @@ export default function InsuranceDash({ showToast, onLogout }) {
       showToast('포인트 부족', '플랫폼에 포인트 충전을 요청하세요.')
       return
     }
-    // 백엔드 제출·검증 호출 → 실제 submissionId/verificationId 확보 (실패 시 로컬 폴백)
-    let submissionId = null
-    let verificationId = null
+    // 진짜 해시가 없으면 verify 호출은 100% hash_mismatch 가 되므로 BE 를 호출하지 않는다.
+    if (!c.recordHash) {
+      showToast('검증 불가', '진료기록 해시를 불러오지 못했습니다. 동의 목록을 새로고침해 주세요.')
+      return
+    }
+    // 동일 record 에 대한 동시 호출(더블클릭 등) 차단
+    if (verifyingRef.current.has(c.recordId)) return
+    verifyingRef.current.add(c.recordId)
     try {
-      const insurerId = localStorage.getItem('userId') || '1'
-      const submission = await apiFetch('/submissions', { method: 'POST', body: { recordId: c.recordId, insurerId: 'me' } })
-      submissionId = submission?.submissionId || submission?.id || null
-      if (submissionId) {
-        const ver = await apiFetch(`/submissions/${submissionId}/verification`, {
-          method: 'POST',
-          body: {
-            submissionId,
-            recordId: c.recordId,
-            hospitalId: c.hospitalId || '1',
-            insurerId,
-            consentId: c.consentId || submissionId,
-            recordHash: c.recordHash || 'demo-record-hash',
-            requestedBy: insurerId,
-            requestedAt: new Date().toISOString(),
-            petId: c.petId,
-            guardianId: c.guardianId,
-          },
-        })
-        verificationId = ver?.verificationId || null
+      let submissionId = null
+      let verificationId = null
+      let pointsCharged = 0
+      let success = false
+      let failureReasons = []
+      try {
+        const insurerId = localStorage.getItem('userId') || ''
+        const submission = await apiFetch('/submissions', { method: 'POST', body: { recordId: c.recordId, insurerId: 'me' } })
+        submissionId = submission?.submissionId || submission?.id || null
+        if (submissionId) {
+          const ver = await apiFetch(`/submissions/${submissionId}/verification`, {
+            method: 'POST',
+            body: {
+              submissionId,
+              recordId: c.recordId,
+              hospitalId: c.hospitalId || '',
+              insurerId,
+              consentId: c.consentId || submissionId,
+              recordHash: c.recordHash,
+              requestedBy: insurerId,
+              requestedAt: new Date().toISOString(),
+              petId: c.petId,
+              guardianId: c.guardianId,
+            },
+          })
+          verificationId = ver?.verificationId || null
+          // BE 응답의 status 는 enum: PENDING|PASSED|FAILED|BLOCKED|EXPIRED.
+          // PASSED 만 검증 통과(idempotent 응답 포함).
+          success = ver?.status === 'PASSED'
+          if (typeof ver?.pointsCharged === 'number') pointsCharged = ver.pointsCharged
+          if (Array.isArray(ver?.failureReasons)) failureReasons = ver.failureReasons
+        }
+      } catch (e) {
+        showToast('검증 실패', e?.message || '검증 API 호출에 실패했습니다.')
+        return
       }
-    } catch {
-      // API 실패: 로컬 폴백으로 진행
+
+      // BE 가 success=false 로 응답한 경우(hash_mismatch / consent_revoked 등) — 통과로 처리하지 않는다.
+      if (!success) {
+        const reasonLabel = failureReasonLabel(failureReasons)
+        showToast('검증 실패', reasonLabel)
+        setState(s => ({
+          ...s,
+          txLog: [{ time: new Date().toLocaleTimeString(), type: '검증', org: 'ins-001', desc: `${c.recordId} 검증 실패 — ${reasonLabel}` }, ...s.txLog],
+        }))
+        return
+      }
+
+      const idempotent = pointsCharged === 0
+      const result = {
+        verificationId,
+        submissionId:   submissionId || `CLM-${c.recordId}`,
+        recordId: c.recordId, pet: c.pet, disease: c.disease,
+        cost: c.cost, hospital: c.hospital,
+        status: 'PASSED', verifiedAt: new Date().toLocaleString(),
+        reviewStatus: null,
+      }
+      setState(s => ({
+        ...s,
+        ptBalance:       s.ptBalance - pointsCharged,
+        usedPt:          s.usedPt + pointsCharged,
+        verifyCount:     s.verifyCount + 1,
+        verifiedRecords: [result, ...s.verifiedRecords],
+        txLog: [{ time: new Date().toLocaleTimeString(), type: '검증', org: 'ins-001', desc: `${c.recordId} 검증 완료 — 해시 일치${idempotent ? ' (idempotent)' : ''}` }, ...s.txLog],
+        ptLog: pointsCharged > 0 ? [{ date: '지금', claim: c.recordId, desc: '검증 API 호출', pt: -pointsCharged }, ...s.ptLog] : s.ptLog,
+      }))
+      setLastVerified(result)
+      showToast('검증 완료', idempotent ? 'PASSED — 이미 검증된 건(idempotent)' : `PASSED — 포인트 차감 (-${pointsCharged})`)
+      setTab('result')
+      // 잔액을 백엔드 기준으로 다시 동기화 (로컬 차감과 어긋남 방지)
+      try {
+        const data = await apiFetch('/insurers/me/points/balance')
+        if (data?.balance !== undefined) setState(s => ({ ...s, ptBalance: data.balance }))
+      } catch { /* 무시 */ }
+    } finally {
+      verifyingRef.current.delete(c.recordId)
     }
-    const result = {
-      verificationId: verificationId || `VER-${crypto.randomUUID().slice(0,8).toUpperCase()}`,
-      submissionId:   submissionId   || `CLM-${c.recordId}`,
-      recordId: c.recordId, pet: c.pet, disease: c.disease,
-      cost: c.cost, hospital: c.hospital,
-      status: 'PASSED', verifiedAt: new Date().toLocaleString(),
-      reviewStatus: null,   // null | APPROVED | REJECTED | FLAGGED
-    }
-    setState(s => ({
-      ...s,
-      ptBalance:       s.ptBalance - 1,
-      usedPt:          s.usedPt + 1,
-      verifyCount:     s.verifyCount + 1,
-      verifiedRecords: [result, ...s.verifiedRecords],
-      txLog: [{ time: new Date().toLocaleTimeString(), type: '검증', org: 'ins-001', desc: `${c.recordId} 검증 완료 — 해시 일치` }, ...s.txLog],
-      ptLog: [{ date: '지금', claim: c.recordId, desc: '검증 API 호출', pt: -1 }, ...s.ptLog],
-    }))
-    setLastVerified(result)
-    showToast('검증 완료', 'PASSED — 포인트 차감 (-1)')
-    setTab('result')
   }
 
   /* ── 심사 결과 기록 ── */
@@ -196,9 +248,29 @@ export default function InsuranceDash({ showToast, onLogout }) {
   /* ── 이상 신고 제출 ── */
   const handleFlag = async () => {
     if (!flagReason) { showToast('오류', '신고 사유를 선택하세요'); return }
+    // BE 발급 verificationId 형식(VER-숫자)만 본문에 포함. 가짜/없음이면 보내지 않는다.
+    const realVerificationId = /^VER-\d+$/.test(flagModal.verificationId || '') ? flagModal.verificationId : null
+
+    // 백엔드에 먼저 이상 신고를 영속화 — 실패 시(중복 PENDING 등) 로컬 상태도 갱신하지 않음.
+    let savedFlag
+    try {
+      savedFlag = await apiFetch('/flags', {
+        method: 'POST',
+        body: {
+          recordId:       flagModal.recordId,
+          verificationId: realVerificationId,
+          reasonCode:     flagReason,
+          note:           flagNote,
+        },
+      })
+    } catch (e) {
+      showToast('신고 실패', e?.message || '이상 신고 등록에 실패했습니다')
+      return
+    }
+
     const flagEntry = {
-      flagId:         `FLAG-${crypto.randomUUID().slice(0,8).toUpperCase()}`,
-      verificationId: flagModal.verificationId,
+      flagId:         savedFlag?.flagId || `FLAG-${crypto.randomUUID().slice(0,8).toUpperCase()}`,
+      verificationId: realVerificationId,
       recordId:       flagModal.recordId,
       pet:            flagModal.pet,
       hospital:       flagModal.hospital,
@@ -208,7 +280,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
       reasonLabel:    FLAG_REASONS.find(r => r.code === flagReason)?.label,
       note:           flagNote,
       flaggedAt:      new Date().toLocaleString(),
-      status:         'PENDING',   // PENDING | REVIEWING | RESOLVED
+      status:         'PENDING',
       reportedBy:     'ins-001',
     }
     setState(s => ({
@@ -228,19 +300,6 @@ export default function InsuranceDash({ showToast, onLogout }) {
     setFlagModal(null)
     setFlagReason('')
     setFlagNote('')
-
-    // 플랫폼이 검토할 수 있도록 백엔드에 이상 신고를 영속화
-    try {
-      await apiFetch('/flags', {
-        method: 'POST',
-        body: {
-          recordId:       flagModal.recordId,
-          verificationId: flagModal.verificationId,
-          reasonCode:     flagReason,
-          note:           flagNote,
-        },
-      })
-    } catch { /* 로컬 상태는 이미 갱신됨 */ }
   }
 
   /* ── 심사 결과 배지 ── */

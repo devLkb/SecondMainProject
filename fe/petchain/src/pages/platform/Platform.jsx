@@ -92,15 +92,22 @@ export default function Platform({ showToast, onLogout }) {
       showToast('처리 실패', e?.message || '신고 처리에 실패했습니다')
       return
     }
-    setState(s => ({
-      ...s,
-      flaggedRecords: (s.flaggedRecords || []).map(f =>
-        f.flagId === resolveModal.flagId
-          ? { ...f, status: 'RESOLVED', resolveCode, resolveNote, resolvedAt: new Date().toLocaleString() }
-          : f
-      ),
-      txLog: [{ time: new Date().toLocaleTimeString(), type: '처리', org: 'platform', desc: `${resolveModal.recordId} — 이상 신고 처리 (${RESOLVE_OPTIONS.find(o => o.code === resolveCode)?.label})` }, ...s.txLog],
-    }))
+    // 처리 후 신고 목록을 BE 기준으로 다시 가져와서 다른 신고도 최신 상태로 본다.
+    try {
+      const rows = await apiFetch('/flags')
+      if (Array.isArray(rows)) setState(s => ({ ...s, flaggedRecords: rows, txLog: [{ time: new Date().toLocaleTimeString(), type: '처리', org: 'platform', desc: `${resolveModal.recordId} — 이상 신고 처리 (${RESOLVE_OPTIONS.find(o => o.code === resolveCode)?.label})` }, ...s.txLog] }))
+    } catch {
+      // 폴백: 로컬 상태만 갱신
+      setState(s => ({
+        ...s,
+        flaggedRecords: (s.flaggedRecords || []).map(f =>
+          f.flagId === resolveModal.flagId
+            ? { ...f, status: 'RESOLVED', resolveCode, resolveNote, resolvedAt: new Date().toLocaleString() }
+            : f
+        ),
+        txLog: [{ time: new Date().toLocaleTimeString(), type: '처리', org: 'platform', desc: `${resolveModal.recordId} — 이상 신고 처리 (${RESOLVE_OPTIONS.find(o => o.code === resolveCode)?.label})` }, ...s.txLog],
+      }))
+    }
     showToast('처리 완료', `${resolveModal.flagId} — ${RESOLVE_OPTIONS.find(o => o.code === resolveCode)?.label}`)
     setResolveModal(null)
     setResolveCode('')

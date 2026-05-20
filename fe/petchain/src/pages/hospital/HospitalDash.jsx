@@ -236,7 +236,8 @@ export default function HospitalDash({ showToast, onLogout }) {
   useEffect(() => {
     async function loadConsents() {
       try {
-        const res = await apiFetch('/consents')
+        // hospitalId=me 로 필터 — 본인 병원이 발급한 진료기록의 동의만 조회
+        const res = await apiFetch('/consents?hospitalId=me')
         const data = Array.isArray(res?.consents) ? res.consents : (Array.isArray(res) ? res : null)
         if (data) {
           const map = {}
@@ -289,17 +290,19 @@ export default function HospitalDash({ showToast, onLogout }) {
         return
       }
     } catch { /* API 실패 시 로컬 폴백 */ }
+    finally {
+      // 성공·실패·return 어떤 경로에서도 로딩 표시는 반드시 끈다.
+      setSearchLoading(false)
+    }
     const pet = state.pets.find(p => p.petId.toUpperCase() === id)
     if (!pet) {
       showToast('조회 실패', '등록된 반려동물을 찾을 수 없습니다')
-      setSearchLoading(false)
       return
     }
     const records = state.medicalRecords.filter(r => r.petId === pet.petId)
     setFoundPet({ ...pet, records })
     setPrevPage(0)
     setPrevMonth('전체')
-    setSearchLoading(false)
   }
 
   // 달 목록 추출

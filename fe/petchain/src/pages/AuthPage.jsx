@@ -53,6 +53,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
   const [gEmail, setGEmail]         = useState('')
   const [gPw, setGPw]               = useState('')
   const [gPwConfirm, setGPwConfirm] = useState('')
+  const [gAddress, setGAddress]     = useState('경기도')
 
   const [hName, setHName]   = useState('')
   const [hBiz, setHBiz]     = useState('')
@@ -82,11 +83,6 @@ export default function AuthPage({ mode, onLogin, onBack }) {
 
   const ROLE_MAP = { USER: 'guardian', HOSPITAL: 'hospital', INSURANCE: 'insurance', PLATFORM: 'platform' }
 
-  function isNetworkError(e) {
-    return e.message.includes('Failed to fetch') || e.message.includes('fetch') ||
-           e.message.includes('502') || e.message.includes('503') || e.message.includes('NetworkError')
-  }
-
   async function handleLogin() {
     setError('')
     setLoading(true)
@@ -99,11 +95,8 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('memberNumber', data.memberNumber || '')
       onLogin(ROLE_MAP[data.memberType?.toUpperCase()] || role)
     } catch (e) {
-      if (isNetworkError(e)) {
-        onLogin(role)
-      } else {
-        setError(e.message)
-      }
+      // 네트워크/서버 오류든 자격증명 오류든 실패를 그대로 표시한다(가짜 로그인 폴백 없음).
+      setError(e.message || '로그인에 실패했습니다.')
     } finally {
       setLoading(false)
     }
@@ -115,7 +108,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
     setLoading(true)
     try {
       const data = await api('/auth/register/user', {
-        name: gName, phone: gPhone, email: gEmail, password: gPw,
+        name: gName, phone: gPhone, email: gEmail, password: gPw, address: gAddress,
       })
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
@@ -274,7 +267,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
                 </div>
               </div>
               <label className="fl">거주 지역</label>
-              <select className="fi" defaultValue="경기도">
+              <select className="fi" value={gAddress} onChange={e => setGAddress(e.target.value)}>
                 {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
               <div className="fi-note">📌 개인정보는 AES-256 암호화 저장됩니다.</div>
