@@ -1,3 +1,5 @@
+// 진료기록 해시를 관리합니다.RegisterRecord는 진료기록 해시와 첨부파일 해시를 등록하고, GetRecordHash는 등록된 해시를 조회합니다.
+// MarkRecordSuperseded는 진료기록이 수정/대체되었을 때 새 해시와 버전을 기록합니다. 원문 진료기록은 저장하지 않습니다.
 package main
 
 import (
@@ -11,6 +13,9 @@ func (c *PetChainContract) RegisterRecord(ctx contractapi.TransactionContextInte
 		return "", err
 	}
 	if err := requireNonEmpty(map[string]string{"recordId": recordId, "hospitalId": hospitalId, "recordHash": recordHash, "createdAt": createdAt}); err != nil {
+		return "", err
+	}
+	if err := c.requireClaimDataChannel(ctx); err != nil {
 		return "", err
 	}
 	if err := assertHash(recordHash, "recordHash"); err != nil {
@@ -66,6 +71,9 @@ func (c *PetChainContract) MarkRecordSuperseded(ctx contractapi.TransactionConte
 		return "", err
 	}
 	if err := requireNonEmpty(map[string]string{"recordId": recordId, "newRecordHash": newRecordHash}); err != nil {
+		return "", err
+	}
+	if err := c.requireClaimDataChannel(ctx); err != nil {
 		return "", err
 	}
 	if err := assertHash(newRecordHash, "newRecordHash"); err != nil {

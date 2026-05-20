@@ -1,3 +1,5 @@
+//입력값 검증과 원장 입출력 공통 함수입니다.조직 권한 확인, 필수값 검사, SHA-256 해시 형식 검사, ISO 날짜 형식 검사,
+// JSON 파싱, Fabric composite key 생성, 상태 저장/조회, 이벤트 발행 등을 담당합니다.
 package main
 
 import (
@@ -29,6 +31,118 @@ func (c *PetChainContract) requireOrg(ctx contractapi.TransactionContextInterfac
 	return fmt.Errorf("MSP %s is not allowed", clientMspId)
 }
 
+func (c *PetChainContract) requireGovernanceChannel(ctx contractapi.TransactionContextInterface) error {
+	channelId := ctx.GetStub().GetChannelID()
+	if channelId != "" && channelId != governanceChannel {
+		return fmt.Errorf("operation is only allowed on %s", governanceChannel)
+	}
+	return nil
+}
+
+func (c *PetChainContract) requireClaimDataChannel(ctx contractapi.TransactionContextInterface) error {
+	channelId := ctx.GetStub().GetChannelID()
+	if channelId == governanceChannel {
+		return fmt.Errorf("claim operation is not allowed on %s", governanceChannel)
+	}
+	if c.isDedicatedClaimChannel(channelId) {
+		return c.requireDedicatedClaimChannelMember(ctx, channelId)
+	}
+	return nil
+}
+
+func (c *PetChainContract) requireClaimChannelForInsurer(ctx contractapi.TransactionContextInterface, insurerId string) error {
+	channelId := ctx.GetStub().GetChannelID()
+	if channelId == "" || channelId == "petchannel" {
+		return nil
+	}
+	if channelId == governanceChannel {
+		return fmt.Errorf("claim operation is not allowed on %s", governanceChannel)
+	}
+	expectedChannel := claimChannelByInsurer[strings.ToLower(insurerId)]
+	if expectedChannel == "" {
+		return fmt.Errorf("insurer %s is not mapped to a claim channel", insurerId)
+	}
+	if channelId != expectedChannel {
+		return fmt.Errorf("insurer %s must use channel %s, got %s", insurerId, expectedChannel, channelId)
+	}
+	if err := c.requireDedicatedClaimChannelMemberForInsurer(ctx, channelId, insurerId); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *PetChainContract) requireInsurerMSPForInsurer(ctx contractapi.TransactionContextInterface, insurerId string) error {
+	clientMspId, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		clientMspId = ""
+	}
+	expectedMsp := insurerMSPByInsurer[strings.ToLower(insurerId)]
+	if expectedMsp == "" {
+		return fmt.Errorf("insurer %s is not mapped to an MSP", insurerId)
+	}
+	if clientMspId != expectedMsp {
+		if clientMspId == "" {
+			clientMspId = "unknown"
+		}
+		return fmt.Errorf("MSP %s is not allowed for insurer %s", clientMspId, insurerId)
+	}
+	return nil
+}
+
+func (c *PetChainContract) isDedicatedClaimChannel(channelId string) bool {
+	return channelId == claimInsuranceAChannel || channelId == claimInsuranceBChannel
+}
+
+func (c *PetChainContract) requireDedicatedClaimChannelMember(ctx contractapi.TransactionContextInterface, channelId string) error {
+	switch channelId {
+	case claimInsuranceAChannel:
+		return c.requireOrg(ctx, hospitalMSP, insurerAMSP)
+	case claimInsuranceBChannel:
+		return c.requireOrg(ctx, hospitalMSP, insurerBMSP)
+	default:
+		return nil
+	}
+}
+
+func (c *PetChainContract) requireDedicatedClaimChannelMemberForInsurer(ctx contractapi.TransactionContextInterface, channelId, insurerId string) error {
+	expectedMsp := insurerMSPByInsurer[strings.ToLower(insurerId)]
+	if expectedMsp == "" {
+		return fmt.Errorf("insurer %s is not mapped to an MSP", insurerId)
+	}
+	if channelId == claimInsuranceAChannel && expectedMsp != insurerAMSP {
+		return fmt.Errorf("insurer %s must use channel %s, got %s", insurerId, claimInsuranceBChannel, channelId)
+	}
+	if channelId == claimInsuranceBChannel && expectedMsp != insurerBMSP {
+		return fmt.Errorf("insurer %s must use channel %s, got %s", insurerId, claimInsuranceAChannel, channelId)
+	}
+	return c.requireOrg(ctx, hospitalMSP, expectedMsp)
+}
+
+func (c *PetChainContract) requireClaimOperatorForInsurer(ctx contractapi.TransactionContextInterface, insurerId string) error {
+	channelId := ctx.GetStub().GetChannelID()
+	if c.isDedicatedClaimChannel(channelId) {
+		if err := c.requireClaimChannelForInsurer(ctx, insurerId); err != nil {
+			return err
+		}
+		return c.requireInsurerMSPForInsurer(ctx, insurerId)
+	}
+	if err := c.requireClaimChannelForInsurer(ctx, insurerId); err != nil {
+		return err
+	}
+	return c.requireOrg(ctx, platformMSP)
+}
+
+func (c *PetChainContract) requireClaimParticipantForInsurer(ctx contractapi.TransactionContextInterface, insurerId string) error {
+	channelId := ctx.GetStub().GetChannelID()
+	if c.isDedicatedClaimChannel(channelId) {
+		return c.requireClaimChannelForInsurer(ctx, insurerId)
+	}
+	if err := c.requireClaimChannelForInsurer(ctx, insurerId); err != nil {
+		return err
+	}
+	return c.requireOrg(ctx, platformMSP)
+}
+
 func requireNonEmpty(values map[string]string) error {
 	for name, value := range values {
 		if strings.TrimSpace(value) == "" {
@@ -36,6 +150,13 @@ func requireNonEmpty(values map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func assertPolicySnapshot(policyVersion, policyHash string) error {
+	if err := requireNonEmpty(map[string]string{"policyVersion": policyVersion, "policyHash": policyHash}); err != nil {
+		return err
+	}
+	return assertHash(policyHash, "policyHash")
 }
 
 func assertHash(value, name string) error {

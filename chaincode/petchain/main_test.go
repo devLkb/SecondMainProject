@@ -1,4 +1,5 @@
-//실제 실행 코드 X 블록체인 로직 검증용 테스트 코드
+//체인코드 테스트입니다.Fabric 실제 네트워크 없이 shimtest.MockStub으로 진료기록 등록, 권한 거부, 중복 ID 거부,
+// 동의 검증, 중복 과금 방지, 포인트 부족 처리, 감사 로그 저장 등을 검증합니다.
 package main
 
 import (
@@ -49,6 +50,16 @@ func newCtx(mspID string) (*contractapi.TransactionContext, *shimtest.MockStub) 
 	ctx.SetStub(stub)
 	ctx.SetClientIdentity(mockIdentity{mspID: mspID})
 	return ctx, stub
+}
+
+func newCtxWithChannel(mspID, channelId string) (*contractapi.TransactionContext, *shimtest.MockStub) {
+	ctx, stub := newCtx(mspID)
+	stub.ChannelID = channelId
+	return ctx, stub
+}
+
+func setCtxMSP(ctx *contractapi.TransactionContext, mspID string) {
+	ctx.SetClientIdentity(mockIdentity{mspID: mspID})
 }
 
 func nextTx(stub *shimtest.MockStub, txID string) {
@@ -173,6 +184,84 @@ func TestCreateSubmissionWithConsentChecksConsentAndRecordHash(t *testing.T) {
 	nextTx(stub, "tx-submission-wrong-insurer")
 	if _, err := contract.CreateSubmissionWithConsent(ctx, "sub_bad_insurer", "rec_001", "con_001", "hos_001", "ins_999", hashA, now); err == nil || !strings.Contains(err.Error(), "does not allow insurer") {
 		t.Fatalf("expected insurer mismatch to be rejected, got: %v", err)
+	}
+}
+
+func TestClaimChannelRejectsWrongInsurer(t *testing.T) {
+	contract := new(PetChainContract)
+	ctx, stub := newCtxWithChannel(insurerAMSP, claimInsuranceAChannel)
+
+	nextTx(stub, "tx-issue-wrong-channel")
+	if _, err := contract.IssuePoints(ctx, "ins_002", "1", "operator_001", now); err == nil || !strings.Contains(err.Error(), claimInsuranceBChannel) {
+		t.Fatalf("expected insurer B to be rejected from insurer A channel, got: %v", err)
+	}
+}
+
+func TestDedicatedClaimChannelRejectsPlatformOrg(t *testing.T) {
+	contract := new(PetChainContract)
+	ctx, stub := newCtxWithChannel(platformMSP, claimInsuranceAChannel)
+
+	nextTx(stub, "tx-platform-record")
+	if _, err := contract.RegisterRecord(ctx, "rec_001", "hos_001", hashA, "[]", now); err == nil || !strings.Contains(err.Error(), "MSP PlatformOrgMSP is not allowed") {
+		t.Fatalf("expected platform MSP to be rejected on dedicated claim channel, got: %v", err)
+	}
+}
+
+func TestGovernanceChannelRejectsClaimOperations(t *testing.T) {
+	contract := new(PetChainContract)
+	ctx, stub := newCtxWithChannel(platformMSP, governanceChannel)
+
+	nextTx(stub, "tx-policy")
+	if _, err := contract.UpsertGovernancePolicy(ctx, "policy-v1", hashD, now, now); err != nil {
+		t.Fatalf("UpsertGovernancePolicy failed: %v", err)
+	}
+
+	nextTx(stub, "tx-claim-on-governance")
+	if _, err := contract.IssuePoints(ctx, "ins_001", "1", "operator_001", now); err == nil || !strings.Contains(err.Error(), "claim operation is not allowed") {
+		t.Fatalf("expected claim operation to be rejected on governance channel, got: %v", err)
+	}
+
+	nextTx(stub, "tx-record-on-governance")
+	if _, err := contract.RegisterRecord(ctx, "rec_001", "hos_001", hashA, "[]", now); err == nil || !strings.Contains(err.Error(), "claim operation is not allowed") {
+		t.Fatalf("expected record operation to be rejected on governance channel, got: %v", err)
+	}
+}
+
+func TestPolicySnapshotIsRecordedAcrossClaimFlow(t *testing.T) {
+	contract := new(PetChainContract)
+	ctx, stub := newCtxWithChannel(hospitalMSP, claimInsuranceAChannel)
+
+	nextTx(stub, "tx-record")
+	if _, err := contract.RegisterRecord(ctx, "rec_001", "hos_001", hashA, `["`+hashB+`"]`, now); err != nil {
+		t.Fatalf("RegisterRecord failed: %v", err)
+	}
+	nextTx(stub, "tx-consent-policy")
+	consentJson, err := contract.RegisterConsentWithPolicy(ctx, "con_001", "rec_001", "ins_001", hashC, "2027-05-15T00:00:00.000Z", now, "policy-v1", hashD)
+	if err != nil {
+		t.Fatalf("RegisterConsentWithPolicy failed: %v", err)
+	}
+	nextTx(stub, "tx-submission-policy")
+	submissionJson, err := contract.CreateSubmissionWithConsentAndPolicy(ctx, "sub_001", "rec_001", "con_001", "hos_001", "ins_001", hashA, now, "policy-v1", hashD)
+	if err != nil {
+		t.Fatalf("CreateSubmissionWithConsentAndPolicy failed: %v", err)
+	}
+	setCtxMSP(ctx, insurerAMSP)
+	nextTx(stub, "tx-issue")
+	if _, err := contract.IssuePoints(ctx, "ins_001", "3", "operator_001", now); err != nil {
+		t.Fatalf("IssuePoints failed: %v", err)
+	}
+	nextTx(stub, "tx-verify-policy")
+	resultJson, err := contract.ProcessSuccessfulVerificationWithPolicy(ctx, "ver_001", "sub_001", hashA, hashD, "2026-05-15T00:01:00.000Z", "audit_001", "idem_001", "policy-v1", hashD)
+	if err != nil {
+		t.Fatalf("ProcessSuccessfulVerificationWithPolicy failed: %v", err)
+	}
+
+	consent := parseResult(t, consentJson)
+	submission := parseResult(t, submissionJson)
+	result := parseResult(t, resultJson)
+	verification := result["verification"].(map[string]interface{})
+	if consent["policyHash"] != hashD || submission["policyHash"] != hashD || verification["policyHash"] != hashD {
+		t.Fatalf("expected policy hash to be preserved: consent=%v submission=%v verification=%v", consent["policyHash"], submission["policyHash"], verification["policyHash"])
 	}
 }
 
