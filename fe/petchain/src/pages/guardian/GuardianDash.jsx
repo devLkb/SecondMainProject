@@ -34,8 +34,15 @@ const CSS = `
 .gd-bottom { padding: 18px 22px; border-top: 1px solid #2d3d25; }
 .gd-user-name { font-size: 14px; font-weight: 600; color: #f5f2ec; }
 .gd-user-region { font-size: 12px; color: #8aaa84; margin-top: 3px; }
-.gd-logout { font-size: 12px; color: #8aaa84; cursor: pointer; margin-top: 10px; border: none; background: none; font-family: var(--font-sans); padding: 0; transition: color 0.1s; }
-.gd-logout:hover { color: #f87171; }
+.gd-logout {
+  display: block; width: 100%; margin-top: 14px;
+  padding: 9px 12px; font-size: 13px; font-weight: 600;
+  color: #f5f2ec; background: rgba(248,113,113,.12);
+  border: 1px solid rgba(248,113,113,.35); border-radius: 8px;
+  cursor: pointer; font-family: var(--font-sans);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.gd-logout:hover { background: #f87171; color: #fff; border-color: #f87171; }
 
 /* ── 메인 ── */
 .gd-main { flex: 1; overflow-y: auto; padding: 36px 40px; background: #f5f2ec; }
@@ -227,11 +234,15 @@ function RecordsTab({ records, onDetail }) {
 
 /* ── MyInfoTab ── */
 function MyInfoTab({ state, update, showToast }) {
-  const [name,   setName]   = useState('홍길동')
-  const [email,  setEmail]  = useState('hong@email.com')
-  const [phone,  setPhone]  = useState('010-1234-5678')
+  const [name,   setName]   = useState(state.userName  || '')
+  const [email,  setEmail]  = useState(state.userEmail || '')
+  const [phone,  setPhone]  = useState(state.userPhone || '')
   const [region, setRegion] = useState(state.userRegion)
-  const handleSave = () => { update({ userRegion:region }); showToast('저장 완료','내 정보가 업데이트되었습니다') }
+  const handleSave = async () => {
+    update({ userRegion:region, userName:name, userEmail:email, userPhone:phone })
+    try { await apiFetch('/users/me',{method:'PATCH',body:{region,name,phone,email}}) } catch { /* 서버 미연결 시 로컬 상태만 갱신 */ }
+    showToast('저장 완료','내 정보가 업데이트되었습니다')
+  }
   const toggleInsurer = id => {
     const next = state.userInsurers.includes(id) ? state.userInsurers.filter(i=>i!==id) : [...state.userInsurers, id]
     update({ userInsurers:next })
@@ -743,9 +754,17 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
   useEffect(() => {
     async function loadData() {
       try {
-        const [petsRes,recordsRes,consentsRes,meRes] = await Promise.allSettled([apiFetch('/pets'),apiFetch('/records?page=0&size=20'),apiFetch('/consents?page=0&size=20'),apiFetch('/users/me')])
-        if (meRes.status==='fulfilled' && meRes.value?.region) update({ userRegion:meRes.value.region })
-        if (petsRes.status==='fulfilled') { const a=Array.isArray(petsRes.value)?petsRes.value:[]; if(a.length>0) update({ pets:a.map(p=>({ petId:String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:'DB손해보험' })) }) }
+        const [petsRes,recordsRes,consentsRes,meRes] = await Promise.allSettled([apiFetch('/pets'),apiFetch('/records?guardianId=me&size=200'),apiFetch('/consents?guardianId=me'),apiFetch('/users/me')])
+        if (meRes.status==='fulfilled' && meRes.value) {
+          const me = meRes.value
+          const patch = {}
+          if (me.region) patch.userRegion = me.region
+          if (me.name)   patch.userName  = me.name
+          if (me.email)  patch.userEmail = me.email
+          if (me.phone)  patch.userPhone = me.phone
+          if (Object.keys(patch).length) update(patch)
+        }
+        if (petsRes.status==='fulfilled') { const a=Array.isArray(petsRes.value)?petsRes.value:[]; if(a.length>0) update({ pets:a.map(p=>({ petId:p.petNumber||String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:'DB손해보험' })) }) }
         if (recordsRes.status==='fulfilled') { const a=Array.isArray(recordsRes.value?.records)?recordsRes.value.records:(Array.isArray(recordsRes.value?.content)?recordsRes.value.content:[]); if(a.length>0) update({ medicalRecords:a.map(r=>({ id:String(r.recordId||r.id),petId:String(r.petId||''),petName:r.petName||'',date:(r.treatmentDate||r.date||'').replaceAll('-','.'),diseases:Array.isArray(r.diagnosisCodes)?r.diagnosisCodes:(Array.isArray(r.diseases)?r.diseases:[]),treatments:Array.isArray(r.treatmentCodes)?r.treatmentCodes:(Array.isArray(r.treatments)?r.treatments:[]),cost:r.treatmentCost||r.cost||0,memo:r.memo||'',onChain:!!(r.recordHash||r.onChain) })) }) }
         if (consentsRes.status==='fulfilled') { const a=Array.isArray(consentsRes.value?.consents)?consentsRes.value.consents:(Array.isArray(consentsRes.value?.content)?consentsRes.value.content:[]); if(a.length>0){const sm={ACTIVE:'active',REVOKED:'revoked',PENDING:'pending'};const m={};a.forEach(c=>{const k=String(c.recordId);m[k]={consentId:String(c.consentId||c.id),recordId:k,guardianId:c.guardianId,insurerId:c.insurerId,status:sm[c.status]||(c.status||'').toLowerCase(),insurerName:c.insurerName||c.insurerId||'',pet:c.petName||'',disease:c.disease||'',hospital:c.hospitalName||'',cost:c.cost||0}});update({consents:m})} }
       } catch { /* fallback */ }
@@ -761,11 +780,11 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
     const c=state.consents[recordId]; const next=c.status==='active'?'revoked':'active'
     toggleConsent(recordId)
     showToast(next==='active'?'동의 완료':'동의 철회', next==='active'?`${recordId} — 보험사에 서류 자동 전달 시작`:`${recordId} — 보험사 접근 차단됨`)
-    try { if(c.status==='active') await apiFetch(`/consents/${c.consentId}/revoke`,{method:'POST'}); else await apiFetch('/consents',{method:'POST',body:{recordId:c.recordId,insurerId:c.insurerId||localStorage.getItem('userId')||'1',guardianId:c.guardianId||localStorage.getItem('userId')||'1'}}) } catch {}
+    try { if(c.status==='active') await apiFetch(`/consents/${c.consentId}/revoke`,{method:'POST'}); else await apiFetch('/consents',{method:'POST',body:{recordId:c.recordId,insurerId:c.insurerId||localStorage.getItem('userId')||'1',guardianId:c.guardianId||localStorage.getItem('userId')||'1'}}) } catch { /* 서버 미연결 시 로컬 상태만 갱신 */ }
   }
   const handleRegionSave = async region => {
     update({ userRegion:region }); showToast('지역 설정 완료',`거주지역이 ${region}(으)로 설정되었습니다`)
-    try { await apiFetch('/users/me',{method:'PATCH',body:{region}}) } catch {}
+    try { await apiFetch('/users/me',{method:'PATCH',body:{region}}) } catch { /* 서버 미연결 시 로컬 상태만 갱신 */ }
   }
   const openPetModal = () => {
     const petId = generatePetId(state.pets.map(p=>p.petId))
@@ -777,8 +796,8 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
     setModal(null); showToast('반려동물 등록',(newPet.name||'새 반려동물')+' 등록 완료')
     try {
       const created=await apiFetch('/pets',{method:'POST',body:{name:newPet.name,species:sm[newPet.species]||newPet.species,breed:newPet.breed,birthYear:newPet.birthYear?Number(newPet.birthYear):undefined,gender:'',isNeutered:false}})
-      if(created?.id){const refreshed=await apiFetch('/pets');const a=Array.isArray(refreshed)?refreshed:[];if(a.length>0)update({pets:a.map(p=>({petId:String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:'DB손해보험'}))})}
-    } catch {}
+      if(created?.id){const refreshed=await apiFetch('/pets');const a=Array.isArray(refreshed)?refreshed:[];if(a.length>0)update({pets:a.map(p=>({petId:p.petNumber||String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:'DB손해보험'}))})}
+    } catch { /* 서버 미연결 시 로컬 상태만 갱신 */ }
   }
 
   return (
@@ -800,7 +819,7 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
             ))}
           </div>
           <div className="gd-bottom">
-            <div className="gd-user-name">홍길동</div>
+            <div className="gd-user-name">{state.userName || '보호자'}</div>
             <div className="gd-user-region">{state.userRegion || '지역 미설정'}</div>
             <button className="gd-logout" onClick={onLogout}>로그아웃 →</button>
           </div>
@@ -844,8 +863,11 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
                       <div style={{ width:50, height:50, borderRadius:12, background:'var(--brand-xl)', border:'1px solid var(--brand-l)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24 }}>{speciesIcon(p.species)}</div>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:18, fontWeight:600 }}>{p.name}</div>
-                        <span className="mono">{p.petId}</span>
-                        <div style={{ fontSize:14, color:'var(--muted)', marginTop:2 }}>{p.species} · {p.breed}</div>
+                        <div style={{ display:'inline-flex', alignItems:'center', gap:6, marginTop:4, padding:'3px 8px', borderRadius:6, background:'var(--brand-xl)', border:'1px solid var(--brand-l)' }}>
+                          <span style={{ fontSize:10, fontWeight:700, color:'var(--brand)', letterSpacing:'.04em' }}>PETCHAIN ID</span>
+                          <span className="mono" style={{ fontSize:12, fontWeight:600, color:'var(--brand)' }}>{p.petId}</span>
+                        </div>
+                        <div style={{ fontSize:14, color:'var(--muted)', marginTop:4 }}>{p.species} · {p.breed}</div>
                       </div>
                       <span className="badge badge-success">보험 활성</span>
                     </div>

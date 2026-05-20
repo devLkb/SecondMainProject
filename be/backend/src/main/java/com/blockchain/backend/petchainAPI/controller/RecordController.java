@@ -36,7 +36,7 @@ public class RecordController {
     public ResponseEntity<ApiResponse<RecordDtos.CreateRecordResponse>> createRecord(
             ApiActor actor,
             @Valid @RequestPart("metadata") RecordDtos.CreateRecordRequest metadata,
-            @RequestPart("recordFile") MultipartFile recordFile,
+            @RequestPart(value = "recordFile", required = false) MultipartFile recordFile,
             @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments,
             HttpServletRequest request) {
         RecordDtos.CreateRecordResponse response = recordApiPort.createRecord(actor, metadata, recordFile, safeAttachments(attachments));

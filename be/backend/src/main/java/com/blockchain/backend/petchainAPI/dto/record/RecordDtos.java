@@ -51,12 +51,19 @@ public final class RecordDtos {
     ) {
     }
 
+    // 목록 화면이 진료기록 행을 그대로 렌더링할 수 있도록 펫 이름·진료비·코드·소견을 함께 내려준다.
     public record RecordSummaryResponse(
             @NotBlank String recordId,
             @NotBlank String hospitalId,
             String guardianId,
             String petId,
+            String petName,
             LocalDate treatmentDate,
+            BigDecimal treatmentCost,
+            List<String> treatmentCodes,
+            List<String> diagnosisCodes,
+            String memo,
+            String onChainStatus,
             Instant createdAt,
             @NotBlank String recordHash
     ) {

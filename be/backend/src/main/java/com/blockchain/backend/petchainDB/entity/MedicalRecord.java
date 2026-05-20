@@ -34,7 +34,16 @@ public class MedicalRecord extends TimestampedEntity {
     @Column(name = "treatment_date", nullable = false)
     private LocalDate treatmentDate;
 
-    @Column(name = "detail_data_hash", nullable = false, length = 64)
+    // EMR-lite: canonicalRecordPayload의 필수 필드. 동일 recordId의 업무상 개정 번호(생성 시 1).
+    @Column(name = "record_version", nullable = false)
+    private Integer recordVersion = 1;
+
+    // EMR-lite: recordHash payload에 포함되는 제출 대상 보험사 식별자(있을 때만). 해시 재계산을 위해 영속화.
+    @Column(name = "intended_insurer_id", length = 40)
+    private String intendedInsurerId;
+
+    // EMR-lite: recordHash = HashContract.hashCanonical(canonicalRecordPayload). 표기 sha256:<64 hex>.
+    @Column(name = "detail_data_hash", nullable = false, length = 80)
     private String detailDataHash;
 
     @Column(name = "findings_encrypted", columnDefinition = "MEDIUMTEXT")

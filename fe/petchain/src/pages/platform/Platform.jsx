@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '../../context/AppContext'
+import apiFetch from '../../api/client'
 
 const RESOLVE_OPTIONS = [
   { code: 'CONFIRMED_FRAUD',   label: '사기 확인 — 병원 조치 요청' },
@@ -12,11 +13,30 @@ export default function Platform({ showToast, onLogout }) {
   const { state, setState } = useApp()
   const [tab, setTab]           = useState('org')
   const [issueAmt, setIssueAmt] = useState(500)
+  const [issueTarget, setIssueTarget] = useState('')
+  const [issueMemo, setIssueMemo]     = useState('')
 
   // 이상 신고 처리 모달
   const [resolveModal, setResolveModal] = useState(null)
   const [resolveCode, setResolveCode]   = useState('')
   const [resolveNote, setResolveNote]   = useState('')
+
+  // 대시보드 진입 시 Org 목록 · 이상 신고 · 모니터링 집계를 백엔드에서 로드
+  useEffect(() => {
+    apiFetch('/admin/orgs')
+      .then(rows => { if (Array.isArray(rows)) setState(s => ({ ...s, orgs: rows })) })
+      .catch(() => {})
+    apiFetch('/flags')
+      .then(rows => { if (Array.isArray(rows)) setState(s => ({ ...s, flaggedRecords: rows })) })
+      .catch(() => {})
+    apiFetch('/admin/monitor')
+      .then(m => { if (m) setState(s => ({
+        ...s,
+        verifyCount: m.verifyCount ?? s.verifyCount,
+        ptBalance:   m.insurerPointBalance ?? s.ptBalance,
+      })) })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabs = [
     { id: 'org',     lbl: 'Org 관리' },
@@ -25,22 +45,53 @@ export default function Platform({ showToast, onLogout }) {
     { id: 'monitor', lbl: '모니터링' },
   ]
 
-  const handleApprove = (id) => {
-    setState(s => ({
-      ...s,
-      orgs: s.orgs.map(o => o.id === id ? { ...o, status: 'active' } : o),
-    }))
-    showToast('Org 승인', `${id} — 활성 상태로 변경됨`)
+  const handleApprove = async (id) => {
+    try {
+      const updated = await apiFetch(`/admin/orgs/${id}/approve`, { method: 'POST' })
+      setState(s => ({
+        ...s,
+        orgs: s.orgs.map(o => o.id === id ? { ...o, ...updated, status: 'active' } : o),
+      }))
+      showToast('Org 승인', `${id} — 활성 상태로 변경됨`)
+    } catch (e) {
+      showToast('승인 실패', e?.message || 'Org 승인에 실패했습니다')
+    }
   }
 
-  const handleIssue = () => {
-    setState(s => ({ ...s, ptBalance: s.ptBalance + issueAmt }))
-    showToast('포인트 발행', `DB손해보험에 ${issueAmt} pt 발행 완료`)
+  const handleIssue = async () => {
+    if (!issueTarget) { showToast('오류', '대상 보험사를 선택하세요'); return }
+    try {
+      const res = await apiFetch(`/admin/insurers/${issueTarget}/points/issue`, {
+        method: 'POST',
+        body: { amount: issueAmt, reason: issueMemo.trim() || '플랫폼 포인트 발행' },
+      })
+      // 발행 직후 표를 실데이터로 갱신해야 어느 보험사가 받았는지 정확히 보인다.
+      try {
+        const rows = await apiFetch('/admin/orgs')
+        if (Array.isArray(rows)) setState(s => ({ ...s, orgs: rows, ptBalance: res?.balance ?? s.ptBalance }))
+        else setState(s => ({ ...s, ptBalance: res?.balance ?? s.ptBalance + issueAmt }))
+      } catch {
+        setState(s => ({ ...s, ptBalance: res?.balance ?? s.ptBalance + issueAmt }))
+      }
+      showToast('포인트 발행', `${issueAmt} pt 발행 완료`)
+      setIssueMemo('')
+    } catch (e) {
+      showToast('발행 실패', e?.message || '포인트 발행에 실패했습니다')
+    }
   }
 
   /* ── 이상 신고 처리 ── */
-  const handleResolve = () => {
+  const handleResolve = async () => {
     if (!resolveCode) { showToast('오류', '처리 결과를 선택하세요'); return }
+    try {
+      await apiFetch(`/flags/${resolveModal.flagId}/resolve`, {
+        method: 'POST',
+        body: { resolveCode, resolveNote },
+      })
+    } catch (e) {
+      showToast('처리 실패', e?.message || '신고 처리에 실패했습니다')
+      return
+    }
     setState(s => ({
       ...s,
       flaggedRecords: (s.flaggedRecords || []).map(f =>
@@ -160,11 +211,16 @@ export default function Platform({ showToast, onLogout }) {
               <div className="card">
                 <div className="card-title">IssuePoint — 보험사에 포인트 발행</div>
                 <label className="fl">대상 보험사</label>
-                <select className="fi"><option>ins-001 · DB손해보험</option><option>ins-002 · 현대해상</option></select>
+                <select className="fi" value={issueTarget} onChange={e => setIssueTarget(e.target.value)}>
+                  <option value="">-- 보험사 선택 --</option>
+                  {state.orgs.filter(o => o.type === '보험사').map(o => (
+                    <option key={o.id} value={o.id}>{o.id} · {o.name}</option>
+                  ))}
+                </select>
                 <label className="fl">발행 수량</label>
                 <input className="fi" type="number" value={issueAmt} onChange={e => setIssueAmt(Number(e.target.value))} />
                 <label className="fl">메모</label>
-                <input className="fi" placeholder="5월 정기 충전" />
+                <input className="fi" placeholder="5월 정기 충전" value={issueMemo} onChange={e => setIssueMemo(e.target.value)} />
                 <button className="btn btn-primary" style={{ width: '100%', padding: 13, fontSize: 14, fontWeight: 700 }} onClick={handleIssue}>
                   발행 실행
                 </button>
@@ -174,16 +230,32 @@ export default function Platform({ showToast, onLogout }) {
                 <table className="tbl">
                   <thead><tr><th>보험사</th><th>잔여</th><th>소모</th></tr></thead>
                   <tbody>
-                    <tr><td style={{ fontWeight: 600 }}>DB손해보험</td><td style={{ fontWeight: 800, color: 'var(--brand)' }}>{state.ptBalance}</td><td style={{ color: 'var(--danger)', fontWeight: 700 }}>{state.usedPt}</td></tr>
-                    <tr><td style={{ fontWeight: 600 }}>현대해상</td><td style={{ color: 'var(--muted)' }}>0</td><td style={{ color: 'var(--muted)' }}>0</td></tr>
+                    {state.orgs.filter(o => o.type === '보험사').length === 0 && (
+                      <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--muted)', padding: 20 }}>등록된 보험사 없음</td></tr>
+                    )}
+                    {state.orgs.filter(o => o.type === '보험사').map(o => (
+                      <tr key={o.id}>
+                        <td style={{ fontWeight: 600 }}>{o.name}</td>
+                        <td style={{ fontWeight: 800, color: 'var(--brand)' }}>{o.balance ?? 0}</td>
+                        <td style={{ color: 'var(--danger)', fontWeight: 700 }}>{o.usedPoints ?? 0}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
                 <div className="divider" />
-                <div className="card-title">병원 크레딧 현황</div>
+                <div className="card-title">병원 목록</div>
                 <table className="tbl">
-                  <thead><tr><th>병원</th><th>크레딧</th></tr></thead>
+                  <thead><tr><th>병원</th><th>상태</th></tr></thead>
                   <tbody>
-                    <tr><td style={{ fontWeight: 600 }}>행복동물병원</td><td style={{ fontWeight: 800, color: 'var(--success)' }}>{state.creditN}</td></tr>
+                    {state.orgs.filter(o => o.type === '병원').length === 0 && (
+                      <tr><td colSpan={2} style={{ textAlign: 'center', color: 'var(--muted)', padding: 20 }}>등록된 병원 없음</td></tr>
+                    )}
+                    {state.orgs.filter(o => o.type === '병원').map(o => (
+                      <tr key={o.id}>
+                        <td style={{ fontWeight: 600 }}>{o.name}</td>
+                        <td><span className={`badge ${o.status === 'active' ? 'badge-success' : 'badge-warning'}`}>{o.status === 'active' ? '활성' : '승인 대기'}</span></td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import DashNav from '../../components/common/DashNav'
 import Overlay from '../../components/common/Overlay'
 import { useApp } from '../../context/AppContext'
@@ -137,8 +137,11 @@ function RecordDetailModal({ record, onClose }) {
 
 // 조직 정보 탭
 function OrgTab() {
-  const orgId   = localStorage.getItem('memberNumber') || localStorage.getItem('userId') || '-'
-  const orgName = localStorage.getItem('hospitalName') || '동물병원'
+  const [me, setMe] = useState(null)
+  // 로그인한 병원 본인 정보를 백엔드에서 가져온다
+  useEffect(() => { apiFetch('/users/me').then(setMe).catch(() => {}) }, [])
+  const orgId   = me?.memberNumber || localStorage.getItem('memberNumber') || localStorage.getItem('userId') || '-'
+  const orgName = me?.orgName || me?.name || localStorage.getItem('hospitalName') || '동물병원'
 
   const CH1_MEMBERS = [
     { label: '한국수의사회', role: 'Orderer', color: '#b8885a' },
@@ -221,23 +224,29 @@ export default function HospitalDash({ showToast, onLogout }) {
   const [formTreatments, setFormTreatments] = useState([])
   const [formCost,       setFormCost]       = useState('')
   const [formMemo,       setFormMemo]       = useState('')
+  const [formAttachments, setFormAttachments] = useState([])
+  const fileInputRef = useRef(null)
 
   const [prevPage,     setPrevPage]     = useState(0)
   const [prevMonth,    setPrevMonth]    = useState('전체')
   const [detailRecord, setDetailRecord] = useState(null)
+  const [creditTx,     setCreditTx]     = useState([])
 
-  // 동의 목록 API 로드
+  // 동의 목록 + 크레딧 적립 내역 API 로드
   useEffect(() => {
     async function loadConsents() {
       try {
-        const data = await apiFetch('/consents')
-        if (data && Array.isArray(data)) {
+        const res = await apiFetch('/consents')
+        const data = Array.isArray(res?.consents) ? res.consents : (Array.isArray(res) ? res : null)
+        if (data) {
           const map = {}
           data.forEach(c => {
             map[c.recordId] = {
               recordId:    c.recordId,
               consentId:   c.consentId || c.id,
               petId:       c.petId,
+              hospitalId:  c.hospitalId || '',
+              recordHash:  c.recordHash || '',
               status:      (c.status || 'pending').toLowerCase(),
               pet:         c.petName || c.pet || '',
               hospital:    c.hospitalName || c.hospital || '',
@@ -253,7 +262,16 @@ export default function HospitalDash({ showToast, onLogout }) {
         }
       } catch { /* 서버 미연결 시 무시 */ }
     }
+    async function loadCredits() {
+      try {
+        // 'me' = 인증된 병원 본인 (프론트는 병원 회사 id를 모름)
+        const res = await apiFetch('/credits/transactions?hospitalId=me&size=50')
+        const list = Array.isArray(res?.transactions) ? res.transactions : []
+        setCreditTx(list)
+      } catch { /* 서버 미연결 시 무시 */ }
+    }
     loadConsents()
+    loadCredits()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = async () => {
@@ -321,8 +339,10 @@ export default function HospitalDash({ showToast, onLogout }) {
       creditN: s.creditN + 1,
       txLog: [{ time: new Date().toLocaleTimeString(), type: '기록', org: 'hosp-001', desc: `${foundPet.name} 진료기록 등록 완료` }, ...s.txLog],
     }))
-    showToast('원장 기록', `${foundPet.name} 진료기록 등록 완료 · 크레딧 +1`)
-    setFoundPet(null); setSearchId(''); setFormDiseases([]); setFormTreatments([]); setFormCost(''); setFormMemo('')
+    showToast('원장 기록', `${foundPet.name} 진료기록 등록 완료 · 크레딧 +1${formAttachments.length ? ` · 첨부 ${formAttachments.length}건` : ''}`)
+    const attachmentsToSend = formAttachments
+    setFoundPet(null); setSearchId(''); setFormDiseases([]); setFormTreatments([]); setFormCost(''); setFormMemo(''); setFormAttachments([])
+    if (fileInputRef.current) fileInputRef.current.value = ''
 
     // Sync with API (graceful degradation)
     try {
@@ -336,11 +356,24 @@ export default function HospitalDash({ showToast, onLogout }) {
       })
       const formData = new FormData()
       formData.append('metadata', new Blob([metadata], { type: 'application/json' }))
-      formData.append('recordFile', new Blob(['record'], { type: 'application/octet-stream' }), 'record.bin')
+      // 사용자가 업로드한 영수증·X-RAY·초음파 파일을 그대로 attachments 로 보낸다. recordFile 은 EMR-lite 에서 선택 항목.
+      attachmentsToSend.forEach(file => {
+        formData.append('attachments', file, file.name)
+      })
       await apiFetch('/records', { method: 'POST', body: formData, isFormData: true })
     } catch {
       // API failure: local state already updated
     }
+  }
+
+  const handleAttachmentChange = (e) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    setFormAttachments(prev => [...prev, ...files])
+  }
+  const removeAttachment = (idx) => {
+    setFormAttachments(prev => prev.filter((_, i) => i !== idx))
+    if (fileInputRef.current && formAttachments.length <= 1) fileInputRef.current.value = ''
   }
 
   return (
@@ -463,10 +496,39 @@ export default function HospitalDash({ showToast, onLogout }) {
 
                 <div className="card">
                   <div className="card-title">첨부 파일 (S3 오프체인)</div>
-                  <div className="upload-zone">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.dcm,.jpg,.jpeg,.png"
+                    style={{ display: 'none' }}
+                    onChange={handleAttachmentChange}
+                  />
+                  <div
+                    className="upload-zone"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ cursor: 'pointer' }}
+                  >
                     📎 영수증 · X-RAY · 초음파 파일 업로드<br />
-                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>원문 AES-256 암호화 저장 · 해시값만 온체인</span>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>클릭하여 선택 · 원문 AES-256 암호화 저장 · 해시값만 온체인</span>
                   </div>
+                  {formAttachments.length > 0 && (
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {formAttachments.map((file, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg-2)', borderRadius: 8, fontSize: 13 }}>
+                          <span style={{ fontSize: 14 }}>📄</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                          <span style={{ color: 'var(--muted)', fontSize: 12, flexShrink: 0 }}>{(file.size / 1024).toFixed(1)} KB</span>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(idx)}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 16, fontWeight: 700, padding: 0 }}
+                            aria-label="첨부 제거"
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -544,7 +606,7 @@ export default function HospitalDash({ showToast, onLogout }) {
             <div className="pane-sub">진료기록 등록·검증 성공 시 적립되는 운영 크레딧 (12개월 유효)</div>
             <div className="g2" style={{ marginBottom: 24 }}>
               <div className="stat-box" style={{ background: 'var(--brand-xl)', border: '1px solid var(--brand-l)' }}>
-                <div className="stat-n" style={{ color: 'var(--brand)' }}>{state.creditN}</div>
+                <div className="stat-n" style={{ color: 'var(--brand)' }}>{creditTx.reduce((sum, t) => sum + (t.amount || 0), 0) || state.creditN}</div>
                 <div className="stat-l" style={{ color: 'var(--brand)', opacity: .75 }}>누적 크레딧</div>
               </div>
               <div className="stat-box" style={{ background: 'var(--success-xl)', border: '1px solid var(--success-l)' }}>
@@ -557,8 +619,18 @@ export default function HospitalDash({ showToast, onLogout }) {
               <table className="tbl">
                 <thead><tr><th>날짜</th><th>record_id</th><th>유형</th><th>내용</th><th>적립</th></tr></thead>
                 <tbody>
-                  <tr><td>05.08</td><td><span className="mono">REC-2024-0041</span></td><td><span className="badge badge-success">ACCRUAL</span></td><td>검증 API 성공</td><td style={{ color: 'var(--success)', fontWeight: 700 }}>+1</td></tr>
-                  <tr><td>05.07</td><td><span className="mono">REC-2024-0040</span></td><td><span className="badge badge-success">ACCRUAL</span></td><td>검증 API 성공</td><td style={{ color: 'var(--success)', fontWeight: 700 }}>+1</td></tr>
+                  {creditTx.length === 0 && state.txLog.filter(t => t.type === '기록' || t.type === '제출').length === 0 && (
+                    <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>적립된 크레딧이 없습니다</td></tr>
+                  )}
+                  {creditTx.map(t => (
+                    <tr key={t.transactionId}>
+                      <td>{(t.createdAt || '').slice(0, 10)}</td>
+                      <td><span className="mono">{t.relatedRecordId || '—'}</span></td>
+                      <td><span className="badge badge-success">ACCRUAL</span></td>
+                      <td>{t.reason || '검증 API 성공'}</td>
+                      <td style={{ color: 'var(--success)', fontWeight: 700 }}>+{t.amount}</td>
+                    </tr>
+                  ))}
                   {state.txLog.filter(t => t.type === '기록' || t.type === '제출').map((t, i) => (
                     <tr key={i}><td>지금</td><td><span className="mono">신규</span></td><td><span className="badge badge-success">ACCRUAL</span></td><td>{t.desc}</td><td style={{ color: 'var(--success)', fontWeight: 700 }}>+1</td></tr>
                   ))}
@@ -577,18 +649,19 @@ export default function HospitalDash({ showToast, onLogout }) {
               <table className="tbl">
                 <thead><tr><th>시각</th><th>record_id</th><th>유형</th><th>내용</th><th>Fabric TX</th><th>상태</th></tr></thead>
                 <tbody>
+                  {state.txLog.length === 0 && (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>기록된 트랜잭션이 없습니다</td></tr>
+                  )}
                   {state.txLog.map((t, i) => (
                     <tr key={i}>
                       <td style={{ color: 'var(--muted)', fontSize: 13 }}>{t.time}</td>
                       <td><span className="mono">{t.desc.split(' ')[0]}</span></td>
                       <td><span className="badge badge-brand">{t.type}</span></td>
                       <td style={{ color: 'var(--text-2)' }}>{t.desc}</td>
-                      <td><span className="mono">a3f2b9c1...</span></td>
+                      <td><span className="mono">—</span></td>
                       <td><span className="badge badge-success">confirmed</span></td>
                     </tr>
                   ))}
-                  <tr><td style={{ color: 'var(--muted)', fontSize: 13 }}>05.08 14:23</td><td><span className="mono">REC-2024-0041</span></td><td><span className="badge badge-brand">기록</span></td><td>원장 기록 완료</td><td><span className="mono">a3f2b9c1...</span></td><td><span className="badge badge-success">confirmed</span></td></tr>
-                  <tr><td style={{ color: 'var(--muted)', fontSize: 13 }}>05.07 11:05</td><td><span className="mono">REC-2024-0040</span></td><td><span className="badge badge-brand">기록</span></td><td>원장 기록 완료</td><td><span className="mono">b4c3d2e1...</span></td><td><span className="badge badge-success">confirmed</span></td></tr>
                 </tbody>
               </table>
             </div>

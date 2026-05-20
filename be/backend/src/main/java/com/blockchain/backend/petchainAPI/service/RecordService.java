@@ -1,5 +1,7 @@
 package com.blockchain.backend.petchainAPI.service;
 
+import com.blockchain.backend.common.HashContract;
+import com.blockchain.backend.common.IdentifierGenerator;
 import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;
 import com.blockchain.backend.petchainAPI.dto.record.RecordDtos;
 import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
@@ -31,13 +33,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -59,10 +60,6 @@ public class RecordService implements RecordApiPort {
                                                         RecordDtos.CreateRecordRequest request,
                                                         MultipartFile recordFile,
                                                         List<MultipartFile> attachments) {
-        if (recordFile == null || recordFile.isEmpty()) {
-            throw ApiException.validation("recordFile은 필수입니다.", java.util.Map.of("recordFile", "required"));
-        }
-
         // 펫: id 또는 펫번호로 전역 조회
         Pet pet = resolvePet(request.petId());
         // 병원: 요청에 있으면 그것, 없으면 인증된 병원 계정에서 도출
@@ -80,20 +77,35 @@ public class RecordService implements RecordApiPort {
         }
 
         MedicalRecord record = new MedicalRecord();
+        // recordId는 canonicalRecordPayload의 필수 필드라 save 전에 미리 발급한다(@PrePersist는 null일 때만 채움).
+        record.setRecordId(IdentifierGenerator.generateRecordId());
+        record.setRecordVersion(1);
         record.setHospital(hospital);
         record.setPet(pet);
         record.setTreatmentDate(request.treatmentDate());
-        record.setTotalCost(request.treatmentCost() == null ? 0 : request.treatmentCost().intValue());
-        record.setFindingsEncrypted(String.join(",", safeList(request.diagnosisCodes())));
-        record.setPrescriptionEncrypted(String.join(",", safeList(request.treatmentCodes())));
+        int treatmentCostKrw = toCostKrw(request.treatmentCost());
+        record.setTotalCost(treatmentCostKrw);
+        record.setIntendedInsurerId(emptyToNull(request.insurerId()));
+
+        List<String> treatmentCodes = sortedCodes(request.treatmentCodes());
+        List<String> diagnosisCodes = sortedCodes(request.diagnosisCodes());
+        record.setFindingsEncrypted(String.join(",", diagnosisCodes));
+        record.setPrescriptionEncrypted(String.join(",", treatmentCodes));
         record.setTestResultsEncrypted(hasText(request.memo()) ? request.memo()
                 : (request.metadata() == null ? null : request.metadata().toString()));
-        record.setDetailDataHash(sha256(fileBytes(recordFile)));
+        // EMR-lite: recordHash는 원문 파일 bytes가 아니라 canonicalRecordPayload(구조화 JSON)의 SHA-256.
+        record.setDetailDataHash(HashContract.hashCanonical(
+                canonicalRecordPayload(record, treatmentCostKrw, treatmentCodes, diagnosisCodes,
+                        request.memo(), request.metadata())));
         MedicalRecord saved = medicalRecordRepository.save(record);
 
+        // 코드 관계 저장은 요청 순서를 유지해 첫 진단코드를 primary로 둔다.
         saveCodes(saved, request.treatmentCodes(), request.diagnosisCodes());
+        // EMR-lite: 원문 파일 업로드는 선택. 첨부 해시는 각 파일 원본 bytes의 SHA-256.
         List<CommonDtos.AttachmentHash> fileHashes = new ArrayList<>();
-        fileHashes.add(saveFile(saved, recordFile, "record"));
+        if (recordFile != null && !recordFile.isEmpty()) {
+            fileHashes.add(saveFile(saved, recordFile, "record"));
+        }
         for (MultipartFile attachment : attachments == null ? List.<MultipartFile>of() : attachments) {
             if (attachment != null && !attachment.isEmpty()) {
                 fileHashes.add(saveFile(saved, attachment, "other"));
@@ -102,13 +114,82 @@ public class RecordService implements RecordApiPort {
         return new RecordDtos.CreateRecordResponse(saved.getRecordId(), saved.getDetailDataHash(), fileHashes);
     }
 
+    // EMR-lite: Hash Contract v1의 canonicalRecordPayload. 키 정렬·NFC·공백 제거·null 생략은
+    // HashContract가 처리하므로 여기서는 필드만 채운다.
+    private static Map<String, Object> canonicalRecordPayload(MedicalRecord record,
+                                                              int treatmentCostKrw,
+                                                              List<String> treatmentCodes,
+                                                              List<String> diagnosisCodes,
+                                                              String memo,
+                                                              Map<String, Object> metadata) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("hashContractVersion", HashContract.VERSION);
+        payload.put("recordId", record.getRecordId());
+        payload.put("recordVersion", record.getRecordVersion());
+        payload.put("hospitalId", String.valueOf(record.getHospital().getId()));
+        payload.put("petId", String.valueOf(record.getPet().getId()));
+        // 날짜만 입력받아도 UTC 자정(T00:00:00Z)으로 정규화한다.
+        payload.put("treatmentDate", record.getTreatmentDate().atStartOfDay(ZoneOffset.UTC).toInstant().toString());
+        payload.put("treatmentCostKrw", treatmentCostKrw);
+        payload.put("treatmentCodes", treatmentCodes);
+        payload.put("diagnosisCodes", diagnosisCodes);
+        // 선택 필드: null이면 HashContract canonical 규칙에 따라 payload에서 생략된다.
+        payload.put("insurerId", record.getIntendedInsurerId());
+        payload.put("memo", emptyToNull(memo));
+        payload.put("metadata", canonicalMetadata(metadata));
+        return payload;
+    }
+
+    // 해시 입력 metadata는 source, externalRecordId 키만 허용한다(Hash Contract v1).
+    private static Map<String, Object> canonicalMetadata(Map<String, Object> metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        Map<String, Object> filtered = new LinkedHashMap<>();
+        Object source = metadata.get("source");
+        Object externalRecordId = metadata.get("externalRecordId");
+        if (source != null) {
+            filtered.put("source", String.valueOf(source));
+        }
+        if (externalRecordId != null) {
+            filtered.put("externalRecordId", String.valueOf(externalRecordId));
+        }
+        return filtered.isEmpty() ? null : filtered;
+    }
+
+    // 진료비를 원화 정수 원 단위로 변환한다(Hash Contract v1: scale 0, 음수·소수 거부).
+    private static int toCostKrw(BigDecimal cost) {
+        if (cost == null) {
+            return 0;
+        }
+        if (cost.signum() < 0) {
+            throw ApiException.validation("진료비는 음수일 수 없습니다.", Map.of("treatmentCost", "negative"));
+        }
+        if (cost.stripTrailingZeros().scale() > 0) {
+            throw ApiException.validation("진료비는 원 단위 정수여야 합니다.", Map.of("treatmentCost", "not_integer"));
+        }
+        return cost.intValueExact();
+    }
+
+    private static List<String> sortedCodes(List<String> codes) {
+        return safeList(codes).stream().sorted().toList();
+    }
+
+    private static String emptyToNull(String value) {
+        return hasText(value) ? value : null;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public RecordDtos.RecordListResponse listRecords(ApiActor actor, RecordDtos.RecordSearchRequest request) {
         int page = Math.max(0, request.page());
         int size = Math.max(1, Math.min(200, request.size()));
+        // 프론트는 보호자 본인 id를 모르고 userId만 갖고 있어 "me"를 보낸다 → 인증 액터로 치환한다.
+        String guardianId = "me".equalsIgnoreCase(request.guardianId())
+                ? String.valueOf(support.guardianByActor(actor).getId())
+                : request.guardianId();
         List<MedicalRecord> filtered = medicalRecordRepository.findAll().stream()
-                .filter(record -> request.guardianId() == null || Objects.equals(String.valueOf(record.getPet().getGuardian().getId()), request.guardianId()) || Objects.equals(record.getPet().getGuardian().getMemberNumber(), request.guardianId()))
+                .filter(record -> guardianId == null || Objects.equals(String.valueOf(record.getPet().getGuardian().getId()), guardianId) || Objects.equals(record.getPet().getGuardian().getMemberNumber(), guardianId))
                 .filter(record -> request.petId() == null || Objects.equals(String.valueOf(record.getPet().getId()), request.petId()) || Objects.equals(record.getPet().getPetNumber(), request.petId()))
                 .sorted(java.util.Comparator.comparing(MedicalRecord::getTreatmentDate).reversed())
                 .toList();
@@ -146,7 +227,13 @@ public class RecordService implements RecordApiPort {
                 String.valueOf(record.getHospital().getId()),
                 String.valueOf(record.getPet().getGuardian().getId()),
                 String.valueOf(record.getPet().getId()),
+                record.getPet().getName(),
                 record.getTreatmentDate(),
+                BigDecimal.valueOf(record.getTotalCost()),
+                support.treatmentCodes(record),
+                support.diagnosisCodes(record),
+                record.getTestResultsEncrypted(),
+                record.getOnChainStatus(),
                 toInstant(record.getCreatedAt()),
                 record.getDetailDataHash()
         );
@@ -176,7 +263,7 @@ public class RecordService implements RecordApiPort {
     }
 
     private CommonDtos.AttachmentHash saveFile(MedicalRecord record, MultipartFile multipartFile, String fileType) {
-        String hash = sha256(fileBytes(multipartFile));
+        String hash = HashContract.hashBytes(fileBytes(multipartFile));
         MedicalRecordFile file = new MedicalRecordFile();
         file.setMedicalRecord(record);
         file.setFileType(fileType);
@@ -194,14 +281,6 @@ public class RecordService implements RecordApiPort {
             return file.getBytes();
         } catch (IOException e) {
             throw new ApiException(ApiErrorCode.VALIDATION_FAILED, "파일을 읽을 수 없습니다.");
-        }
-    }
-
-    private static String sha256(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm unavailable", e);
         }
     }
 

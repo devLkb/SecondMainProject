@@ -132,3 +132,7 @@ volumes/
 docker-compose.override.yml
 compose.override.yml
 override.yml
+
+# --- Local DB watcher (Claude session tools) ---
+db_watch.sh
+db_watch.ps1

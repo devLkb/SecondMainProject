@@ -55,10 +55,13 @@ public class ConsentService implements ConsentApiPort {
     @Override
     @Transactional(readOnly = true)
     public ConsentDtos.ConsentListResponse listConsents(ApiActor actor, String recordId, String guardianId, String insurerId) {
+        // 프론트는 로그인 회원 본인 id를 모르고 userId만 갖고 있어 "me"를 보낸다 → 인증 액터로 치환한다.
+        String gId = "me".equalsIgnoreCase(guardianId) ? String.valueOf(support.guardianByActor(actor).getId()) : guardianId;
+        String iId = "me".equalsIgnoreCase(insurerId) ? String.valueOf(support.insurerByActor(actor).getId()) : insurerId;
         List<ClaimPackage> claims = claimPackageRepository.findAll().stream()
                 .filter(claim -> recordId == null || Objects.equals(claim.getMedicalRecord().getRecordId(), recordId))
-                .filter(claim -> guardianId == null || Objects.equals(String.valueOf(claim.getGuardian().getId()), guardianId) || Objects.equals(claim.getGuardian().getMemberNumber(), guardianId))
-                .filter(claim -> insurerId == null || Objects.equals(String.valueOf(claim.getInsuranceCompany().getId()), insurerId) || Objects.equals(claim.getInsuranceCompany().getMemberNumber(), insurerId))
+                .filter(claim -> gId == null || Objects.equals(String.valueOf(claim.getGuardian().getId()), gId) || Objects.equals(claim.getGuardian().getMemberNumber(), gId))
+                .filter(claim -> iId == null || Objects.equals(String.valueOf(claim.getInsuranceCompany().getId()), iId) || Objects.equals(claim.getInsuranceCompany().getMemberNumber(), iId))
                 .toList();
         return new ConsentDtos.ConsentListResponse(claims.stream().map(this::toResponse).toList());
     }
@@ -107,16 +110,27 @@ public class ConsentService implements ConsentApiPort {
 
     private ConsentDtos.ConsentResponse toResponse(ClaimPackage claim) {
         var snapshot = support.consentSnapshot(claim);
+        MedicalRecord record = claim.getMedicalRecord();
+        List<String> diagnoses = support.diagnosisCodes(record);
         return new ConsentDtos.ConsentResponse(
                 claim.getClaimId(),
-                claim.getMedicalRecord().getRecordId(),
+                record.getRecordId(),
                 String.valueOf(claim.getInsuranceCompany().getId()),
                 String.valueOf(claim.getGuardian().getId()),
                 snapshot.status(),
                 snapshot.consentedAt(),
                 snapshot.expiresAt(),
                 claim.getFabricTxId(),
-                claim.getClaimId()
+                claim.getClaimId(),
+                record.getPet().getName(),
+                record.getHospital().getName(),
+                claim.getInsuranceCompany().getName(),
+                diagnoses.isEmpty() ? null : diagnoses.get(0),
+                java.math.BigDecimal.valueOf(record.getTotalCost()),
+                record.getTreatmentDate(),
+                String.valueOf(record.getPet().getId()),
+                String.valueOf(record.getHospital().getId()),
+                record.getDetailDataHash()
         );
     }
 }

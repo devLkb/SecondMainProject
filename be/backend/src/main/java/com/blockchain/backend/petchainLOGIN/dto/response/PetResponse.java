@@ -54,6 +54,11 @@ public class PetResponse {
         this.message     = message;
     }
 
+    // 프론트엔드는 펫 식별자를 p.id 로 읽으므로 petId 와 동일한 값을 id 로도 노출한다.
+    public Long getId() {
+        return petId;
+    }
+
     public static PetResponse from(Pet pet, String message) {
         return new PetResponse(pet, message);
     }

@@ -49,6 +49,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
 
   useEffect(() => { localStorage.setItem('petchain_insurance_tab', tab) }, [tab])
   const [lastVerified, setLastVerified] = useState(null)
+  const [ptTx, setPtTx] = useState([])
 
   const [flagModal, setFlagModal]   = useState(null)
   const [flagReason, setFlagReason] = useState('')
@@ -56,31 +57,32 @@ export default function InsuranceDash({ showToast, onLogout }) {
 
   // 포인트 잔액 + 동의 목록 API 로드
   useEffect(() => {
-    const userId = localStorage.getItem('userId')
-
     async function loadBalance() {
       try {
-        if (!userId) return
-        const data = await apiFetch(`/insurers/${userId}/points/balance`)
+        // 'me' = 인증된 보험사 본인 (프론트는 보험사 회사 id를 모름)
+        const data = await apiFetch('/insurers/me/points/balance')
         if (data?.balance !== undefined) setState(s => ({ ...s, ptBalance: data.balance }))
       } catch { /* 폴백 */ }
     }
 
     async function loadConsents() {
       try {
-        const data = await apiFetch(`/consents${userId ? `?insurerId=${userId}` : ''}`)
-        if (data && Array.isArray(data)) {
+        const res = await apiFetch('/consents?insurerId=me')
+        const data = Array.isArray(res?.consents) ? res.consents : (Array.isArray(res) ? res : null)
+        if (data) {
           const map = {}
           data.forEach(c => {
             map[c.recordId] = {
               recordId:    c.recordId,
               consentId:   c.consentId || c.id,
               petId:       c.petId,
+              hospitalId:  c.hospitalId || '',
+              recordHash:  c.recordHash || '',
               status:      (c.status || 'pending').toLowerCase(),
               pet:         c.petName || c.pet || '',
               hospital:    c.hospitalName || c.hospital || '',
               insurerName: c.insurerName || '',
-              insurerId:   c.insurerId || userId || '',
+              insurerId:   c.insurerId || '',
               disease:     c.disease || '',
               treatment:   c.treatment || '',
               cost:        c.cost || 0,
@@ -92,8 +94,17 @@ export default function InsuranceDash({ showToast, onLogout }) {
       } catch { /* 폴백 */ }
     }
 
+    async function loadTransactions() {
+      try {
+        const res = await apiFetch('/insurers/me/points/transactions?size=50')
+        const list = Array.isArray(res?.transactions) ? res.transactions : []
+        setPtTx(list)
+      } catch { /* 폴백 */ }
+    }
+
     loadBalance()
     loadConsents()
+    loadTransactions()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeConsents  = Object.values(state.consents).filter(c => c.status === 'active')
@@ -105,9 +116,37 @@ export default function InsuranceDash({ showToast, onLogout }) {
       showToast('포인트 부족', '플랫폼에 포인트 충전을 요청하세요.')
       return
     }
+    // 백엔드 제출·검증 호출 → 실제 submissionId/verificationId 확보 (실패 시 로컬 폴백)
+    let submissionId = null
+    let verificationId = null
+    try {
+      const insurerId = localStorage.getItem('userId') || '1'
+      const submission = await apiFetch('/submissions', { method: 'POST', body: { recordId: c.recordId, insurerId: 'me' } })
+      submissionId = submission?.submissionId || submission?.id || null
+      if (submissionId) {
+        const ver = await apiFetch(`/submissions/${submissionId}/verification`, {
+          method: 'POST',
+          body: {
+            submissionId,
+            recordId: c.recordId,
+            hospitalId: c.hospitalId || '1',
+            insurerId,
+            consentId: c.consentId || submissionId,
+            recordHash: c.recordHash || 'demo-record-hash',
+            requestedBy: insurerId,
+            requestedAt: new Date().toISOString(),
+            petId: c.petId,
+            guardianId: c.guardianId,
+          },
+        })
+        verificationId = ver?.verificationId || null
+      }
+    } catch {
+      // API 실패: 로컬 폴백으로 진행
+    }
     const result = {
-      verificationId: `VER-${crypto.randomUUID().slice(0,8).toUpperCase()}`,
-      submissionId:   `CLM-${c.recordId}`,
+      verificationId: verificationId || `VER-${crypto.randomUUID().slice(0,8).toUpperCase()}`,
+      submissionId:   submissionId   || `CLM-${c.recordId}`,
       recordId: c.recordId, pet: c.pet, disease: c.disease,
       cost: c.cost, hospital: c.hospital,
       status: 'PASSED', verifiedAt: new Date().toLocaleString(),
@@ -125,36 +164,10 @@ export default function InsuranceDash({ showToast, onLogout }) {
     setLastVerified(result)
     showToast('검증 완료', 'PASSED — 포인트 차감 (-1)')
     setTab('result')
-
-    // Sync with API (graceful degradation)
-    try {
-      const insurerId = localStorage.getItem('userId') || c.insurerId || '1'
-      const submission = await apiFetch('/submissions', { method: 'POST', body: { recordId: c.recordId, insurerId } })
-      const submissionId = submission?.submissionId || submission?.id
-      if (submissionId) {
-        await apiFetch(`/submissions/${submissionId}/verification`, {
-          method: 'POST',
-          body: {
-            submissionId,
-            recordId: c.recordId,
-            hospitalId: c.hospitalId || '1',
-            insurerId,
-            consentId: c.consentId || submissionId,
-            recordHash: c.recordHash || 'demo-record-hash',
-            requestedBy: insurerId,
-            requestedAt: new Date().toISOString(),
-            petId: c.petId,
-            guardianId: c.guardianId,
-          },
-        })
-      }
-    } catch {
-      // API failure: local state already updated
-    }
   }
 
   /* ── 심사 결과 기록 ── */
-  const handleReview = (status) => {
+  const handleReview = async (status) => {
     if (!lastVerified) return
     setState(s => ({
       ...s,
@@ -167,10 +180,21 @@ export default function InsuranceDash({ showToast, onLogout }) {
     }))
     setLastVerified(prev => ({ ...prev, reviewStatus: status }))
     showToast('심사 완료', `${status} — 원장 기록 완료`)
+
+    // 실제 submissionId(CLM-연도-...)가 있으면 백엔드 청구 상태에 반영
+    const statusMap = { APPROVED: 'APPROVED_BY_INSURER', REJECTED: 'REJECTED_BY_INSURER' }
+    const mapped = statusMap[status]
+    if (mapped && /^CLM-\d/.test(lastVerified.submissionId || '')) {
+      try {
+        await apiFetch(`/submissions/${lastVerified.submissionId}/claim-status`, {
+          method: 'POST', body: { status: mapped },
+        })
+      } catch { /* 로컬 상태는 이미 갱신됨 */ }
+    }
   }
 
   /* ── 이상 신고 제출 ── */
-  const handleFlag = () => {
+  const handleFlag = async () => {
     if (!flagReason) { showToast('오류', '신고 사유를 선택하세요'); return }
     const flagEntry = {
       flagId:         `FLAG-${crypto.randomUUID().slice(0,8).toUpperCase()}`,
@@ -204,6 +228,19 @@ export default function InsuranceDash({ showToast, onLogout }) {
     setFlagModal(null)
     setFlagReason('')
     setFlagNote('')
+
+    // 플랫폼이 검토할 수 있도록 백엔드에 이상 신고를 영속화
+    try {
+      await apiFetch('/flags', {
+        method: 'POST',
+        body: {
+          recordId:       flagModal.recordId,
+          verificationId: flagModal.verificationId,
+          reasonCode:     flagReason,
+          note:           flagNote,
+        },
+      })
+    } catch { /* 로컬 상태는 이미 갱신됨 */ }
   }
 
   /* ── 심사 결과 배지 ── */
@@ -463,7 +500,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
               {[
                 { n: state.ptBalance,   l: '잔여 포인트',  c: 'var(--brand)',   bg: 'var(--brand-xl)' },
                 { n: state.usedPt,      l: '이번달 소모',  c: 'var(--danger)',  bg: 'var(--danger-xl)' },
-                { n: 1000,              l: '충전 총량',    c: 'var(--text-2)', bg: 'var(--bg-2)' },
+                { n: ptTx.filter(t => t.transactionType === 'issue').reduce((sum, t) => sum + (t.amount || 0), 0), l: '충전 총량', c: 'var(--text-2)', bg: 'var(--bg-2)' },
                 { n: state.verifyCount, l: '총 검증 건',   c: 'var(--success)', bg: 'var(--success-xl)' },
               ].map((s, i) => (
                 <div key={i} className="stat-box" style={{ background: s.bg, border: `1px solid ${s.c}22` }}>
@@ -491,7 +528,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
                 </thead>
                 <tbody>
                   {state.ptLog.map((p, i) => (
-                    <tr key={i}>
+                    <tr key={`local-${i}`}>
                       <td>{p.date}</td>
                       <td><span className="badge badge-danger">DEDUCT</span></td>
                       <td><span className="mono">{p.claim}</span></td>
@@ -499,13 +536,21 @@ export default function InsuranceDash({ showToast, onLogout }) {
                       <td style={{ color: 'var(--danger)', fontWeight: 700 }}>{p.pt}</td>
                     </tr>
                   ))}
-                  <tr>
-                    <td>05.01</td>
-                    <td><span className="badge badge-brand">ISSUE</span></td>
-                    <td>—</td>
-                    <td>플랫폼 발행</td>
-                    <td style={{ color: 'var(--brand)', fontWeight: 700 }}>+1,000</td>
-                  </tr>
+                  {ptTx.map(t => {
+                    const isIssue = t.transactionType === 'issue'
+                    return (
+                      <tr key={t.transactionId}>
+                        <td>{(t.createdAt || '').slice(0, 10)}</td>
+                        <td><span className={`badge ${isIssue ? 'badge-brand' : 'badge-danger'}`}>{(t.transactionType || '').toUpperCase()}</span></td>
+                        <td><span className="mono">{t.relatedRecordId || '—'}</span></td>
+                        <td>{t.reason || '—'}</td>
+                        <td style={{ color: isIssue ? 'var(--brand)' : 'var(--danger)', fontWeight: 700 }}>{isIssue ? '+' : '-'}{t.amount}</td>
+                      </tr>
+                    )
+                  })}
+                  {state.ptLog.length === 0 && ptTx.length === 0 && (
+                    <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>거래 이력이 없습니다</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>

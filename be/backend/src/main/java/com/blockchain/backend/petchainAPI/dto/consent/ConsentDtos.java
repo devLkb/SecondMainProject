@@ -20,6 +20,8 @@ public final class ConsentDtos {
     ) {
     }
 
+    // 동의 카드/목록이 그대로 렌더링할 수 있도록 펫·병원·보험사 이름과 진료 정보를 함께 내려준다.
+    // recordHash 는 보험사 검증 호출(verifySubmission)이 실제 해시를 보낼 수 있도록 함께 노출한다.
     public record ConsentResponse(
             @NotBlank String consentId,
             @NotBlank String recordId,
@@ -29,7 +31,16 @@ public final class ConsentDtos {
             Instant validFrom,
             Instant expiresAt,
             String blockchainReference,
-            String auditLogId
+            String auditLogId,
+            String petName,
+            String hospitalName,
+            String insurerName,
+            String disease,
+            java.math.BigDecimal cost,
+            java.time.LocalDate date,
+            String petId,
+            String hospitalId,
+            String recordHash
     ) {
     }
 

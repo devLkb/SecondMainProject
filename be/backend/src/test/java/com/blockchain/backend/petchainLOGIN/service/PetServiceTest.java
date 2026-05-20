@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 import com.blockchain.backend.petchainDB.entity.Guardian;
 import com.blockchain.backend.petchainDB.entity.Pet;
 import com.blockchain.backend.petchainDB.repository.GuardianRepository;
+import com.blockchain.backend.petchainDB.repository.MedicalRecordRepository;
+import com.blockchain.backend.petchainDB.repository.PetInsuranceRepository;
 import com.blockchain.backend.petchainDB.repository.PetRepository;
 import com.blockchain.backend.petchainLOGIN.dto.request.PetRegisterRequest;
 import com.blockchain.backend.petchainLOGIN.dto.response.PetResponse;
@@ -26,12 +28,16 @@ class PetServiceTest {
     PetRepository petRepository;
     @Mock
     GuardianRepository guardianRepository;
+    @Mock
+    MedicalRecordRepository medicalRecordRepository;
+    @Mock
+    PetInsuranceRepository petInsuranceRepository;
 
     PetService petService;
 
     @BeforeEach
     void setUp() {
-        petService = new PetService(petRepository, guardianRepository);
+        petService = new PetService(petRepository, guardianRepository, medicalRecordRepository, petInsuranceRepository);
     }
 
     @Test

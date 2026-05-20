@@ -2,6 +2,7 @@ package com.blockchain.backend.petchainLOGIN.controller;
 
 import com.blockchain.backend.petchainAPI.security.ApiActor;
 import com.blockchain.backend.petchainLOGIN.dto.request.PetRegisterRequest;
+import com.blockchain.backend.petchainLOGIN.dto.response.PetDetailResponse;
 import com.blockchain.backend.petchainLOGIN.dto.response.PetResponse;
 import com.blockchain.backend.petchainLOGIN.service.PetService;
 import jakarta.validation.Valid;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,6 +37,12 @@ public class PetController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(petService.registerPet(requireUserId(actor), req));
+    }
+
+    // 병원의 환자 조회: PetChain ID(DB id 또는 펫번호)로 펫 + 진료기록 조회
+    @GetMapping("/{petId}")
+    public ResponseEntity<PetDetailResponse> getPet(@PathVariable String petId) {
+        return ResponseEntity.ok(petService.getPetDetail(petId));
     }
 
     private static Long requireUserId(ApiActor actor) {

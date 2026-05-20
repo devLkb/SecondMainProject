@@ -55,7 +55,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         // credentials 를 허용하므로 와일드카드(*) 대신 명시적 Origin 목록만 허용한다.
         config.setAllowedOrigins(allowedOrigins);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
 

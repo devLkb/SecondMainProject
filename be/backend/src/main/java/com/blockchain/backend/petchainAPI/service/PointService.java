@@ -33,16 +33,25 @@ public class PointService implements PointApiPort {
     @Override
     @Transactional
     public PointDtos.PointBalanceResponse getInsurerPointBalance(ApiActor actor, String insurerId) {
-        InsuranceCompany insurer = support.insurerByExternalId(insurerId);
+        InsuranceCompany insurer = resolveInsurer(actor, insurerId);
         support.requireInsurerScope(actor, insurer);
         PointBalance balance = balance(DomainValues.PointOwnerType.INSURANCE, insurer.getId());
         return new PointDtos.PointBalanceResponse(String.valueOf(insurer.getId()), balance.getBalance(), support.toInstant(balance.getUpdatedAt()));
     }
 
+    // insurerId가 "me"이면 인증된 보험사 액터로, 그 외에는 외부 식별자로 보험사를 조회한다.
+    // 프론트는 로그인 시 보험사 회사 id를 모르고 userId만 갖고 있어 "me"를 사용한다.
+    private InsuranceCompany resolveInsurer(ApiActor actor, String insurerId) {
+        if (insurerId == null || "me".equalsIgnoreCase(insurerId)) {
+            return support.insurerByActor(actor);
+        }
+        return support.insurerByExternalId(insurerId);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public PointDtos.TransactionListResponse getInsurerPointTransactions(ApiActor actor, String insurerId, PointDtos.TransactionSearchRequest request) {
-        InsuranceCompany insurer = support.insurerByExternalId(insurerId);
+        InsuranceCompany insurer = resolveInsurer(actor, insurerId);
         support.requireInsurerScope(actor, insurer);
         return transactionList(pointTransactionRepository.findAll().stream()
                 .filter(tx -> matchesOwner(tx, DomainValues.PointOwnerType.INSURANCE, insurer.getId()))
@@ -52,15 +61,31 @@ public class PointService implements PointApiPort {
     @Override
     @Transactional(readOnly = true)
     public PointDtos.TransactionListResponse getPointTransactions(ApiActor actor, PointDtos.TransactionSearchRequest request) {
-        return transactionList(filteredTransactions(request), request.page(), request.size());
+        PointDtos.TransactionSearchRequest resolved = resolveMe(actor, request);
+        return transactionList(filteredTransactions(resolved), resolved.page(), resolved.size());
     }
 
     @Override
     @Transactional(readOnly = true)
     public PointDtos.TransactionListResponse getCreditTransactions(ApiActor actor, PointDtos.TransactionSearchRequest request) {
-        return transactionList(filteredTransactions(request).stream()
+        PointDtos.TransactionSearchRequest resolved = resolveMe(actor, request);
+        return transactionList(filteredTransactions(resolved).stream()
                 .filter(tx -> DomainValues.PointOwnerType.HOSPITAL.equals(tx.getFromOwnerType()) || DomainValues.PointOwnerType.HOSPITAL.equals(tx.getToOwnerType()))
-                .toList(), request.page(), request.size());
+                .toList(), resolved.page(), resolved.size());
+    }
+
+    // hospitalId/insurerId가 "me"이면 인증된 액터 본인의 식별자로 치환한다.
+    private PointDtos.TransactionSearchRequest resolveMe(ApiActor actor, PointDtos.TransactionSearchRequest request) {
+        String hospitalId = request.hospitalId();
+        String insurerId = request.insurerId();
+        if ("me".equalsIgnoreCase(hospitalId)) {
+            hospitalId = String.valueOf(support.hospitalByActor(actor).getId());
+        }
+        if ("me".equalsIgnoreCase(insurerId)) {
+            insurerId = String.valueOf(support.insurerByActor(actor).getId());
+        }
+        return new PointDtos.TransactionSearchRequest(insurerId, hospitalId, request.type(),
+                request.from(), request.to(), request.page(), request.size());
     }
 
     @Override
