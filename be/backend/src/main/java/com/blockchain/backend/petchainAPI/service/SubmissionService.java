@@ -1,5 +1,6 @@
 package com.blockchain.backend.petchainAPI.service;
 
+import com.blockchain.backend.chain.PetChainLedger;
 import com.blockchain.backend.petchainAPI.dto.common.ClaimReviewStatus;
 import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;
 import com.blockchain.backend.petchainAPI.dto.common.PackageAccessStatus;
@@ -19,20 +20,26 @@ import com.blockchain.backend.petchainDB.repository.ClaimPackageRepository;
 import com.blockchain.backend.petchainDB.repository.MedicalRecordFileRepository;
 import com.blockchain.backend.petchainDB.repository.PetInsuranceRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class SubmissionService implements SubmissionApiPort {
+    private static final Logger log = LoggerFactory.getLogger(SubmissionService.class);
+
     private final ApiDomainSupport support;
     private final ClaimPackageRepository claimPackageRepository;
     private final PetInsuranceRepository petInsuranceRepository;
     private final MedicalRecordFileRepository medicalRecordFileRepository;
+    private final PetChainLedger chainLedger;
 
     @Override
     @Transactional
@@ -52,6 +59,27 @@ public class SubmissionService implements SubmissionApiPort {
         }
         claim.setClaimStatus("requested");
         ClaimPackage saved = claimPackageRepository.save(claim);
+
+        // ── 체인코드 연동: 제출 생성 (동의·해시·병원 검증 포함) ─────────────
+        if (chainLedger.isEnabled()) {
+            try {
+                String createdAtIso = saved.getCreatedAt() != null
+                        ? saved.getCreatedAt().toInstant(ZoneOffset.UTC).toString()
+                        : Instant.now().toString();
+                String txId = chainLedger.createSubmissionWithConsent(
+                        "SUB-" + saved.getClaimId(),
+                        record.getRecordId(),
+                        "CON-" + saved.getClaimId(),
+                        String.valueOf(record.getHospital().getId()),
+                        insurer.getMemberNumber(),
+                        record.getDetailDataHash(),
+                        createdAtIso);
+                log.info("CreateSubmissionWithConsent 성공 (claimId={}, txId={})", saved.getClaimId(), txId);
+            } catch (Exception e) {
+                log.warn("CreateSubmissionWithConsent 온체인 반영 실패 (claimId={}): {}", saved.getClaimId(), e.getMessage());
+            }
+        }
+
         return new SubmissionDtos.CreateSubmissionResponse(
                 saved.getClaimId(),
                 support.submissionStatus(saved),

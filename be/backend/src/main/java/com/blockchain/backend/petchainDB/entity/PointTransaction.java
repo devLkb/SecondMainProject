@@ -45,6 +45,10 @@ public class PointTransaction {
     @Column(name = "fabric_tx_id", length = 64)
     private String fabricTxId;
 
+    // reversal 거래가 되돌린 원본 거래의 id. 같은 원본을 두 번 reverse 하는 것을 막는 데 쓴다.
+    @Column(name = "reversed_transaction_id")
+    private Long reversedTransactionId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

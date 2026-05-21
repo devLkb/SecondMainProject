@@ -1,6 +1,8 @@
 package com.blockchain.backend.petchainAPI.service;
 
+import com.blockchain.backend.chain.PetChainLedger;
 import com.blockchain.backend.common.DomainValues;
+import com.blockchain.backend.common.HashContract;
 import com.blockchain.backend.petchainAPI.dto.common.VerificationDataAccessStatus;
 import com.blockchain.backend.petchainAPI.dto.verification.VerificationDtos;
 import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
@@ -16,20 +18,27 @@ import com.blockchain.backend.petchainDB.repository.PointBalanceRepository;
 import com.blockchain.backend.petchainDB.repository.PointTransactionRepository;
 import com.blockchain.backend.petchainDB.repository.VerificationLogRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class VerificationService implements VerificationApiPort {
+    private static final Logger log = LoggerFactory.getLogger(VerificationService.class);
+
     private final ApiDomainSupport support;
     private final ClaimPackageRepository claimPackageRepository;
     private final VerificationLogRepository verificationLogRepository;
     private final PointBalanceRepository pointBalanceRepository;
     private final PointTransactionRepository pointTransactionRepository;
+    private final PetChainLedger chainLedger;
 
     @Override
     @Transactional
@@ -60,10 +69,14 @@ public class VerificationService implements VerificationApiPort {
         }
 
         if (!claim.getMedicalRecord().getDetailDataHash().equals(request.recordHash())) {
-            return persistVerification(claim, request.requestedBy(), "hash_mismatch", 0).toResponse(false);
+            PersistedVerification pv = persistVerification(claim, request.requestedBy(), "hash_mismatch", 0);
+            submitRecordVerificationOnChain(claim, pv.getLog(), "FAILED", "[\"hash_mismatch\"]");
+            return pv.toResponse(false);
         }
         if (!"active".equalsIgnoreCase(claim.getConsentStatus())) {
-            return persistVerification(claim, request.requestedBy(), "consent_revoked", 0).toResponse(false);
+            PersistedVerification pv = persistVerification(claim, request.requestedBy(), "consent_revoked", 0);
+            submitRecordVerificationOnChain(claim, pv.getLog(), "BLOCKED", "[\"consent_revoked\"]");
+            return pv.toResponse(false);
         }
 
         PointBalance insurerBalance = balance(DomainValues.PointOwnerType.INSURANCE, claim.getInsuranceCompany().getId());
@@ -79,7 +92,10 @@ public class VerificationService implements VerificationApiPort {
         claim.setClaimStatus("verified");
         claim.setVerifiedAt(java.time.LocalDateTime.now());
         claimPackageRepository.save(claim);
-        return persistVerification(claim, request.requestedBy(), "verified", ApiDomainSupport.VERIFY_POINT_COST).toResponse(true);
+
+        PersistedVerification pv = persistVerification(claim, request.requestedBy(), "verified", ApiDomainSupport.VERIFY_POINT_COST);
+        submitProcessSuccessfulVerificationOnChain(claim, pv.getLog());
+        return pv.toResponse(true);
     }
 
     @Override
@@ -170,12 +186,81 @@ public class VerificationService implements VerificationApiPort {
         return tx;
     }
 
+    // ── 체인코드 연동 헬퍼 ────────────────────────────────────────────────────
+
+    /**
+     * 검증 성공 시 ProcessSuccessfulVerification 호출.
+     * 포인트 차감 + 크레딧 적립이 체인코드 내에서 원자적으로 처리된다.
+     */
+    private void submitProcessSuccessfulVerificationOnChain(ClaimPackage claim, VerificationLog savedLog) {
+        if (!chainLedger.isEnabled()) return;
+        try {
+            String recordHash = claim.getMedicalRecord().getDetailDataHash();
+            String consentSnapshotHash = HashContract.hashBytes(
+                    ("CON-" + claim.getClaimId() + "|" + claim.getConsentStatus()).getBytes(StandardCharsets.UTF_8));
+            String verifiedAtIso = savedLog.getRequestedAt() != null
+                    ? savedLog.getRequestedAt().toInstant(ZoneOffset.UTC).toString()
+                    : Instant.now().toString();
+            String verificationId = "VER-" + savedLog.getId();
+            String auditLogId = "AUD-" + savedLog.getId();
+            String idempotencyKey = "idem-ver-" + savedLog.getId();
+
+            String txId = chainLedger.processSuccessfulVerification(
+                    verificationId,
+                    "SUB-" + claim.getClaimId(),
+                    recordHash,
+                    consentSnapshotHash,
+                    verifiedAtIso,
+                    auditLogId,
+                    idempotencyKey);
+            savedLog.setFabricTxId(txId.isEmpty() ? null : txId);
+            claim.setVerifyTxId(txId.isEmpty() ? null : txId);
+        } catch (Exception e) {
+            log.warn("ProcessSuccessfulVerification 온체인 반영 실패 (claimId={}, logId={}): {}",
+                    claim.getClaimId(), savedLog.getId(), e.getMessage());
+        }
+    }
+
+    /** 검증 실패/차단 시 RecordVerification 호출 */
+    private void submitRecordVerificationOnChain(ClaimPackage claim, VerificationLog savedLog,
+                                                  String status, String failureReasonsJson) {
+        if (!chainLedger.isEnabled()) return;
+        try {
+            String recordHash = claim.getMedicalRecord().getDetailDataHash();
+            String consentSnapshotHash = HashContract.hashBytes(
+                    ("CON-" + claim.getClaimId() + "|" + claim.getConsentStatus()).getBytes(StandardCharsets.UTF_8));
+            String verifiedAtIso = savedLog.getRequestedAt() != null
+                    ? savedLog.getRequestedAt().toInstant(ZoneOffset.UTC).toString()
+                    : Instant.now().toString();
+            String verificationId = "VER-" + savedLog.getId();
+            String auditLogId = "AUD-" + savedLog.getId();
+
+            String txId = chainLedger.recordVerification(
+                    verificationId,
+                    "SUB-" + claim.getClaimId(),
+                    status,
+                    failureReasonsJson,
+                    recordHash,
+                    consentSnapshotHash,
+                    verifiedAtIso,
+                    auditLogId);
+            savedLog.setFabricTxId(txId.isEmpty() ? null : txId);
+        } catch (Exception e) {
+            log.warn("RecordVerification 온체인 반영 실패 (claimId={}, logId={}, status={}): {}",
+                    claim.getClaimId(), savedLog.getId(), status, e.getMessage());
+        }
+    }
+
+    // ── PersistedVerification ─────────────────────────────────────────────────
+
     private class PersistedVerification {
         private final VerificationLog log;
 
         PersistedVerification(VerificationLog log) {
             this.log = log;
         }
+
+        VerificationLog getLog() { return log; }
 
         VerificationDtos.VerificationResponse toResponse(boolean success) {
             return toResponse(success, false);

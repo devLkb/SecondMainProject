@@ -1,5 +1,7 @@
 package com.blockchain.backend.petchainAPI.service;
 
+import com.blockchain.backend.chain.PetChainLedger;
+import com.blockchain.backend.common.HashContract;
 import com.blockchain.backend.petchainAPI.dto.consent.ConsentDtos;
 import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
 import com.blockchain.backend.petchainAPI.error.ApiException;
@@ -13,19 +15,27 @@ import com.blockchain.backend.petchainDB.entity.PetInsurance;
 import com.blockchain.backend.petchainDB.repository.ClaimPackageRepository;
 import com.blockchain.backend.petchainDB.repository.PetInsuranceRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class ConsentService implements ConsentApiPort {
+    private static final Logger log = LoggerFactory.getLogger(ConsentService.class);
+
     private final ApiDomainSupport support;
     private final ClaimPackageRepository claimPackageRepository;
     private final PetInsuranceRepository petInsuranceRepository;
+    private final PetChainLedger chainLedger;
 
     @Override
     @Transactional
@@ -49,6 +59,27 @@ public class ConsentService implements ConsentApiPort {
         claim.setConsentedAt(java.time.LocalDateTime.now());
         claim.setClaimStatus("requested");
         ClaimPackage saved = claimPackageRepository.save(claim);
+
+        // ── 체인코드 연동: 보호자 동의 등록 ─────────────────────────────────
+        if (chainLedger.isEnabled()) {
+            try {
+                String guardianHashedId = HashContract.hashBytes(
+                        guardian.getMemberNumber().getBytes(StandardCharsets.UTF_8));
+                Instant consentedAt = saved.getConsentedAt().toInstant(ZoneOffset.UTC);
+                String validUntil = consentedAt.plusSeconds(365L * 24 * 60 * 60).toString();
+                String txId = chainLedger.registerConsent(
+                        "CON-" + saved.getClaimId(),
+                        record.getRecordId(),
+                        insurer.getMemberNumber(),
+                        guardianHashedId,
+                        validUntil,
+                        consentedAt.toString());
+                saved.setFabricTxId(txId.isEmpty() ? null : txId);
+            } catch (Exception e) {
+                log.warn("RegisterConsent 온체인 반영 실패 (claimId={}): {}", saved.getClaimId(), e.getMessage());
+            }
+        }
+
         return toResponse(saved);
     }
 
@@ -81,6 +112,18 @@ public class ConsentService implements ConsentApiPort {
         support.requireGuardianScope(actor, claim.getGuardian());
         claim.setConsentStatus("revoked");
         claim.setClaimStatus("pending");
+
+        // ── 체인코드 연동: 동의 철회 ─────────────────────────────────────────
+        if (chainLedger.isEnabled()) {
+            try {
+                String reason = (request != null && request.reason() != null && !request.reason().isBlank())
+                        ? request.reason() : "USER_REVOKED";
+                chainLedger.revokeConsent("CON-" + claim.getClaimId(), Instant.now().toString(), reason);
+            } catch (Exception e) {
+                log.warn("RevokeConsent 온체인 반영 실패 (claimId={}): {}", claim.getClaimId(), e.getMessage());
+            }
+        }
+
         return toResponse(claim);
     }
 

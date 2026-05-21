@@ -1,5 +1,6 @@
 package com.blockchain.backend.petchainAPI.service;
 
+import com.blockchain.backend.chain.PetChainLedger;
 import com.blockchain.backend.common.HashContract;
 import com.blockchain.backend.common.IdentifierGenerator;
 import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;
@@ -8,24 +9,31 @@ import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
 import com.blockchain.backend.petchainAPI.error.ApiException;
 import com.blockchain.backend.petchainAPI.port.RecordApiPort;
 import com.blockchain.backend.petchainAPI.security.ApiActor;
+import com.blockchain.backend.petchainDB.entity.ClaimPackage;
 import com.blockchain.backend.petchainDB.entity.DiseaseCode;
 import com.blockchain.backend.petchainDB.entity.Guardian;
 import com.blockchain.backend.petchainDB.entity.Hospital;
+import com.blockchain.backend.petchainDB.entity.InsuranceCompany;
 import com.blockchain.backend.petchainDB.entity.MedicalRecord;
 import com.blockchain.backend.petchainDB.entity.MedicalRecordDisease;
 import com.blockchain.backend.petchainDB.entity.MedicalRecordFile;
 import com.blockchain.backend.petchainDB.entity.MedicalRecordTreatment;
 import com.blockchain.backend.petchainDB.entity.Pet;
+import com.blockchain.backend.petchainDB.entity.PetInsurance;
 import com.blockchain.backend.petchainDB.entity.TreatmentCode;
+import com.blockchain.backend.petchainDB.repository.ClaimPackageRepository;
 import com.blockchain.backend.petchainDB.repository.DiseaseCodeRepository;
 import com.blockchain.backend.petchainDB.repository.GuardianRepository;
 import com.blockchain.backend.petchainDB.repository.MedicalRecordDiseaseRepository;
 import com.blockchain.backend.petchainDB.repository.MedicalRecordFileRepository;
 import com.blockchain.backend.petchainDB.repository.MedicalRecordRepository;
 import com.blockchain.backend.petchainDB.repository.MedicalRecordTreatmentRepository;
+import com.blockchain.backend.petchainDB.repository.PetInsuranceRepository;
 import com.blockchain.backend.petchainDB.repository.PetRepository;
 import com.blockchain.backend.petchainDB.repository.TreatmentCodeRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +42,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -44,7 +53,10 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class RecordService implements RecordApiPort {
+    private static final Logger log = LoggerFactory.getLogger(RecordService.class);
+
     private final ApiDomainSupport support;
+    private final PetChainLedger chainLedger;
     private final MedicalRecordRepository medicalRecordRepository;
     private final MedicalRecordFileRepository medicalRecordFileRepository;
     private final MedicalRecordTreatmentRepository medicalRecordTreatmentRepository;
@@ -53,6 +65,8 @@ public class RecordService implements RecordApiPort {
     private final GuardianRepository guardianRepository;
     private final TreatmentCodeRepository treatmentCodeRepository;
     private final DiseaseCodeRepository diseaseCodeRepository;
+    private final ClaimPackageRepository claimPackageRepository;
+    private final PetInsuranceRepository petInsuranceRepository;
 
     @Override
     @Transactional
@@ -111,7 +125,92 @@ public class RecordService implements RecordApiPort {
                 fileHashes.add(saveFile(saved, attachment, "other"));
             }
         }
+
+        // EMR 흐름 연결: 진료기록 저장과 동시에 보호자가 동의 토글할 수 있도록 pending ClaimPackage 를 자동 생성한다.
+        // 요청에 insurerId 가 명시되면 그 보험사 한 곳, 아니면 펫이 가입한 모든 보험사로 fan-out.
+        autoCreateClaimPackages(saved, guardian, pet);
+
+        // ── 체인코드 연동: 진료기록 해시 등록 ────────────────────────────────
+        // 온체인 실패해도 오프체인 진료기록은 유지하고 로그만 남긴다.
+        if (chainLedger.isEnabled()) {
+            try {
+                String attachJson = fileHashes.stream()
+                        .filter(h -> h.hash() != null && h.hash().startsWith("sha256:"))
+                        .map(h -> "\"" + h.hash() + "\"")
+                        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                if (attachJson.equals("[]") && !fileHashes.isEmpty()) {
+                    attachJson = "[]";
+                }
+                String createdAtIso = (saved.getCreatedAt() != null)
+                        ? saved.getCreatedAt().toInstant(ZoneOffset.UTC).toString()
+                        : Instant.now().toString();
+                String txId = chainLedger.registerRecord(
+                        saved.getRecordId(),
+                        String.valueOf(hospital.getId()),
+                        saved.getDetailDataHash(),
+                        attachJson,
+                        createdAtIso);
+                saved.setFabricTxId(txId.isEmpty() ? null : txId);
+                saved.setOnChainStatus("confirmed");
+            } catch (Exception e) {
+                log.warn("RegisterRecord 온체인 반영 실패 (recordId={}): {}", saved.getRecordId(), e.getMessage());
+                saved.setOnChainStatus("failed");
+            }
+        }
+
         return new RecordDtos.CreateRecordResponse(saved.getRecordId(), saved.getDetailDataHash(), fileHashes);
+    }
+
+    private void autoCreateClaimPackages(MedicalRecord savedRecord, Guardian guardian, Pet pet) {
+        List<InsuranceCompany> targets = new ArrayList<>();
+        String intendedInsurerId = savedRecord.getIntendedInsurerId();
+
+        if (intendedInsurerId != null && !intendedInsurerId.isBlank()) {
+            // 요청에 보험사가 명시된 경우 그 한 곳. 잘못된 식별자는 무시(진료기록 저장은 이미 끝났음).
+            try {
+                targets.add(support.insurerByExternalId(intendedInsurerId));
+            } catch (ApiException ignored) {
+            }
+        } else {
+            // 명시 안 됐으면 펫이 가입한 모든 보험사로 fan-out.
+            petInsuranceRepository.findByPet_Id(pet.getId()).stream()
+                    .map(PetInsurance::getInsuranceCompany)
+                    .filter(Objects::nonNull)
+                    .forEach(targets::add);
+        }
+
+        for (InsuranceCompany insurer : targets) {
+            boolean exists = claimPackageRepository
+                    .findByMedicalRecord_RecordIdAndInsuranceCompany_Id(savedRecord.getRecordId(), insurer.getId())
+                    .isPresent();
+            if (exists) continue;
+
+            // PetInsurance 가 없으면 만들어서 ClaimPackage 와 연결한다(ConsentService 패턴 미러링).
+            PetInsurance policy = petInsuranceRepository
+                    .findFirstByPet_IdAndInsuranceCompany_Id(pet.getId(), insurer.getId())
+                    .orElseGet(() -> createPetInsurancePolicy(pet, guardian, insurer));
+
+            ClaimPackage claim = new ClaimPackage();
+            claim.setMedicalRecord(savedRecord);
+            claim.setGuardian(guardian);
+            claim.setInsuranceCompany(insurer);
+            claim.setPetInsurance(policy);
+            claim.setConsentStatus("pending");
+            claim.setClaimStatus("pending");
+            claimPackageRepository.save(claim);
+        }
+    }
+
+    private PetInsurance createPetInsurancePolicy(Pet pet, Guardian guardian, InsuranceCompany insurer) {
+        PetInsurance policy = new PetInsurance();
+        policy.setPet(pet);
+        policy.setGuardian(guardian);
+        policy.setInsuranceCompany(insurer);
+        policy.setProductName("PetChain 기본 연동 보험");
+        policy.setPolicyNumber("POL-" + pet.getId() + "-" + insurer.getId());
+        policy.setStartDate(LocalDate.now());
+        policy.setStatus("active");
+        return petInsuranceRepository.save(policy);
     }
 
     // EMR-lite: Hash Contract v1의 canonicalRecordPayload. 키 정렬·NFC·공백 제거·null 생략은

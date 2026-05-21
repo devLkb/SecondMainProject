@@ -8,4 +8,5 @@ import java.util.List;
 public interface PointTransactionRepository extends JpaRepository<PointTransaction, Long> {
     List<PointTransaction> findByToOwnerTypeAndToOwnerIdOrderByCreatedAtDesc(String ownerType, Long ownerId);
     List<PointTransaction> findByFromOwnerTypeAndFromOwnerIdOrderByCreatedAtDesc(String ownerType, Long ownerId);
+    boolean existsByReversedTransactionId(Long reversedTransactionId);
 }

@@ -14,6 +14,10 @@ services:
       TZ: Asia/Seoul
     volumes:
       - mysql_data:/var/lib/mysql
+      # 운영(prod 프로파일)으로 빈 DB에 처음 기동할 때 스키마를 자동 적재하려면 주석 해제.
+      # prod 는 ddl-auto=validate 라 스키마가 미리 있어야 기동된다. mysql 이미지는 첫 초기화
+      # (빈 볼륨)에서만 /docker-entrypoint-initdb.d 의 .sql 을 MYSQL_DATABASE 에 실행한다.
+      # - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -33,6 +37,11 @@ services:
     expose:
       - "8080"
     environment:
+      # 병원/보험사/admin 기본 계정은 어느 프로파일에서든 항상 시드된다(loginId 로 멱등).
+      # 비우면 ddl-auto=update 로 스키마가 자동 생성된다(가장 간단).
+      # prod 로 두면 JWT_SECRET/DB_PASSWORD 기본값 사용을 차단하고(ProductionConfigGuard)
+      # ddl-auto=validate 가 되므로, 위 mysql 의 schema.sql 자동 적재 주석을 함께 해제해야 한다.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-petchain}

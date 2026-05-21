@@ -11,27 +11,27 @@ public final class IdentifierGenerator {
     }
 
     public static String generateUserNumber() {
-        return "U-" + digits(8);
+        return "U-" + digits(12);
     }
 
     public static String generateHospitalNumber() {
-        return "H-" + digits(8);
+        return "H-" + digits(12);
     }
 
     public static String generateInsuranceNumber() {
-        return "P-" + digits(8);
+        return "P-" + digits(12);
     }
 
     public static String generatePetNumber() {
-        return "A-" + digits(8);
+        return "A-" + digits(12);
     }
 
     public static String generateRecordId() {
-        return "REC-" + Year.now().getValue() + "-" + digits(8);
+        return "REC-" + Year.now().getValue() + "-" + digits(12);
     }
 
     public static String generateClaimId() {
-        return "CLM-" + Year.now().getValue() + "-" + digits(8);
+        return "CLM-" + Year.now().getValue() + "-" + digits(12);
     }
 
     public static String generateNftTokenId() {

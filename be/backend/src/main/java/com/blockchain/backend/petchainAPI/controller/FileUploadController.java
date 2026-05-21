@@ -1,6 +1,7 @@
 package com.blockchain.backend.petchainAPI.controller;
 
 import com.blockchain.backend.petchainAPI.dto.common.ApiResponse;
+import com.blockchain.backend.petchainAPI.security.ApiActor;
 import com.blockchain.backend.petchainAPI.service.FileUploadService;
 import com.blockchain.backend.petchainDB.entity.MedicalRecordFile;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,10 +25,12 @@ public class FileUploadController {
 
     @PostMapping
     public ApiResponse<FileMetaResponse> saveFileMeta(
+            ApiActor actor,
             @PathVariable Long recordId,
             @Validated @RequestBody SaveFileMetaRequest body,
             HttpServletRequest request) {
         MedicalRecordFile saved = fileUploadService.saveFileMeta(
+                actor,
                 recordId,
                 body.s3Key(),
                 body.originalFilename(),
@@ -38,14 +41,15 @@ public class FileUploadController {
     }
 
     @GetMapping
-    public ApiResponse<List<FileMetaResponse>> getFiles(@PathVariable Long recordId, HttpServletRequest request) {
-        return ApiResponse.of(fileUploadService.getFiles(recordId).stream().map(FileUploadController::toResponse).toList(), request);
+    public ApiResponse<List<FileMetaResponse>> getFiles(ApiActor actor, @PathVariable Long recordId, HttpServletRequest request) {
+        return ApiResponse.of(fileUploadService.getFiles(actor, recordId).stream().map(FileUploadController::toResponse).toList(), request);
     }
 
     @DeleteMapping("/{fileId}")
-    public ResponseEntity<Void> deleteFile(@PathVariable Long recordId,
+    public ResponseEntity<Void> deleteFile(ApiActor actor,
+                                           @PathVariable Long recordId,
                                            @PathVariable Long fileId) {
-        fileUploadService.softDelete(fileId);
+        fileUploadService.softDelete(actor, recordId, fileId);
         return ResponseEntity.noContent().build();
     }
 

@@ -1,1 +1,2 @@
 - [Deferred security items](deferred-security-items.md) — 2026-05-18 보안 리뷰에서 보류된 항목(토큰 URL 노출, PII 암호화, Redis state, enum 중앙화)
+- [Project: Chaincode Integration](project-chaincode-integration.md) — 체인코드-백엔드 연동 구현 완료 상태, ID 매핑 규칙, 활성화 방법

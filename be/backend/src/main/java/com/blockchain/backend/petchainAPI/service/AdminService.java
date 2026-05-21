@@ -49,6 +49,13 @@ public class AdminService implements AdminApiPort {
                 .orElseThrow(() -> new ApiException(ApiErrorCode.RESOURCE_NOT_FOUND, "거래를 찾을 수 없습니다."));
         PointTransaction original = pointTransactionRepository.findById(id)
                 .orElseThrow(() -> new ApiException(ApiErrorCode.RESOURCE_NOT_FOUND, "거래를 찾을 수 없습니다."));
+        // 중복 reversal 방지: reversal 거래 자체는 되돌릴 수 없고, 이미 되돌린 거래도 다시 되돌릴 수 없다.
+        if ("reversal".equalsIgnoreCase(original.getTxType())) {
+            throw new ApiException(ApiErrorCode.CONFLICT, "취소(reversal) 거래는 다시 되돌릴 수 없습니다.");
+        }
+        if (pointTransactionRepository.existsByReversedTransactionId(original.getId())) {
+            throw new ApiException(ApiErrorCode.CONFLICT, "이미 취소된 거래입니다.");
+        }
         if (original.getToOwnerType() != null && original.getToOwnerId() != null) {
             PointBalance to = balance(original.getToOwnerType(), original.getToOwnerId());
             to.setBalance(Math.max(0, to.getBalance() - original.getAmount()));
@@ -66,6 +73,7 @@ public class AdminService implements AdminApiPort {
         reversal.setAmount(original.getAmount());
         reversal.setDescription(request.reason());
         reversal.setRelatedClaim(original.getRelatedClaim());
+        reversal.setReversedTransactionId(original.getId());
         PointTransaction saved = pointTransactionRepository.save(reversal);
         return new AdminDtos.ReversePointTransactionResponse(String.valueOf(original.getId()), String.valueOf(saved.getId()), original.getAmount(), String.valueOf(saved.getId()), Instant.now());
     }
