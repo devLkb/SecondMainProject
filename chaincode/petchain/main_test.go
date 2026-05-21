@@ -131,6 +131,11 @@ func TestMSPAccessControlRejectsUnauthorizedWrites(t *testing.T) {
 	if _, err := contract.IssuePoints(ctx, "ins_001", "1", "operator_001", now); err == nil || !strings.Contains(err.Error(), "MSP InsurerOrgMSP is not allowed") {
 		t.Fatalf("expected insurer MSP to be rejected for IssuePoints, got: %v", err)
 	}
+
+	nextTx(stub, "tx-insurer-purchase-points")
+	if _, err := contract.ConfirmPointPurchase(ctx, "pp_001", "ins_001", "10", "pay_001", "ord_001", now, "billing-system", "idem_purchase_001"); err == nil || !strings.Contains(err.Error(), "MSP InsurerOrgMSP is not allowed") {
+		t.Fatalf("expected insurer MSP to be rejected for ConfirmPointPurchase, got: %v", err)
+	}
 }
 
 func TestDuplicateIdsAndInvalidPayloadsAreRejected(t *testing.T) {
@@ -194,6 +199,22 @@ func TestClaimChannelRejectsWrongInsurer(t *testing.T) {
 	nextTx(stub, "tx-issue-wrong-channel")
 	if _, err := contract.IssuePoints(ctx, "ins_002", "1", "operator_001", now); err == nil || !strings.Contains(err.Error(), claimInsuranceBChannel) {
 		t.Fatalf("expected insurer B to be rejected from insurer A channel, got: %v", err)
+	}
+}
+
+func TestConfirmPointPurchaseSucceedsOnDedicatedClaimChannelForInsurer(t *testing.T) {
+	contract := new(PetChainContract)
+	ctx, stub := newCtxWithChannel(insurerAMSP, claimInsuranceAChannel)
+
+	nextTx(stub, "tx-point-purchase-dedicated")
+	resultJson, err := contract.ConfirmPointPurchase(ctx, "pp_001", "ins_001", "10", "pay_001", "ord_001", now, "billing-system", "idem_purchase_001")
+	if err != nil {
+		t.Fatalf("ConfirmPointPurchase failed on dedicated claim channel: %v", err)
+	}
+
+	result := parseResult(t, resultJson)
+	if result["pointTx"].(map[string]interface{})["type"] != "POINT_PURCHASE" {
+		t.Fatalf("unexpected point purchase transaction: %v", result)
 	}
 }
 
@@ -371,6 +392,88 @@ func TestInsufficientPointsDoesNotChargeOrAccrueCredit(t *testing.T) {
 	}
 	if creditBalance["balance"].(float64) != 0 {
 		t.Fatalf("expected credit balance to remain zero, got: %v", creditBalance["balance"])
+	}
+}
+
+func TestConfirmPointPurchaseAccruesBalanceAndStoresReferences(t *testing.T) {
+	contract := new(PetChainContract)
+	ctx, stub := newCtx(platformMSP)
+
+	nextTx(stub, "tx-point-purchase")
+	resultJson, err := contract.ConfirmPointPurchase(ctx, "pp_001", "ins_001", "10", "pay_001", "ord_001", now, "billing-system", "idem_purchase_001")
+	if err != nil {
+		t.Fatalf("ConfirmPointPurchase failed: %v", err)
+	}
+
+	result := parseResult(t, resultJson)
+	purchase := result["purchase"].(map[string]interface{})
+	pointTx := result["pointTx"].(map[string]interface{})
+	if purchase["purchaseId"] != "pp_001" || purchase["paymentId"] != "pay_001" || purchase["pointTransactionId"] != pointTx["transactionId"] {
+		t.Fatalf("unexpected purchase payload: %v", purchase)
+	}
+	if pointTx["type"] != "POINT_PURCHASE" || pointTx["delta"].(float64) != 10 {
+		t.Fatalf("unexpected point purchase transaction: %v", pointTx)
+	}
+
+	pointBalance := parseResult(t, must(contract.GetPointBalance(ctx, "ins_001")))
+	if pointBalance["balance"].(float64) != 10 {
+		t.Fatalf("expected point balance 10, got: %v", pointBalance["balance"])
+	}
+
+	purchaseJson, err := contract.GetPointPurchase(ctx, "pp_001")
+	if err != nil {
+		t.Fatalf("GetPointPurchase failed: %v", err)
+	}
+	storedPurchase := parseResult(t, purchaseJson)
+	if storedPurchase["orderId"] != "ord_001" {
+		t.Fatalf("unexpected stored purchase payload: %v", storedPurchase)
+	}
+}
+
+func TestConfirmPointPurchaseIsIdempotentWithinWindow(t *testing.T) {
+	contract := new(PetChainContract)
+	ctx, stub := newCtx(platformMSP)
+
+	nextTx(stub, "tx-point-purchase-1")
+	firstJson, err := contract.ConfirmPointPurchase(ctx, "pp_001", "ins_001", "10", "pay_001", "ord_001", now, "billing-system", "idem_purchase_001")
+	if err != nil {
+		t.Fatalf("first ConfirmPointPurchase failed: %v", err)
+	}
+	nextTx(stub, "tx-point-purchase-retry")
+	retryJson, err := contract.ConfirmPointPurchase(ctx, "pp_retry", "ins_001", "10", "pay_retry", "ord_retry", "2026-05-15T00:04:00.000Z", "billing-system", "idem_purchase_001")
+	if err != nil {
+		t.Fatalf("retry ConfirmPointPurchase failed: %v", err)
+	}
+
+	first := parseResult(t, firstJson)
+	retry := parseResult(t, retryJson)
+	if first["pointTx"].(map[string]interface{})["transactionId"] != retry["pointTx"].(map[string]interface{})["transactionId"] {
+		t.Fatalf("expected idempotent point purchase transaction")
+	}
+
+	pointBalance := parseResult(t, must(contract.GetPointBalance(ctx, "ins_001")))
+	if pointBalance["balance"].(float64) != 10 {
+		t.Fatalf("expected point balance 10 after retry, got: %v", pointBalance["balance"])
+	}
+}
+
+func TestConfirmPointPurchaseRejectsDuplicatePaymentAndOrder(t *testing.T) {
+	contract := new(PetChainContract)
+	ctx, stub := newCtx(platformMSP)
+
+	nextTx(stub, "tx-point-purchase-1")
+	if _, err := contract.ConfirmPointPurchase(ctx, "pp_001", "ins_001", "10", "pay_001", "ord_001", now, "billing-system", "idem_purchase_001"); err != nil {
+		t.Fatalf("ConfirmPointPurchase failed: %v", err)
+	}
+
+	nextTx(stub, "tx-point-purchase-dup-payment")
+	if _, err := contract.ConfirmPointPurchase(ctx, "pp_002", "ins_001", "10", "pay_001", "ord_002", "2026-05-15T00:06:00.000Z", "billing-system", "idem_purchase_002"); err == nil || !strings.Contains(err.Error(), "payment already exists") {
+		t.Fatalf("expected duplicate payment to be rejected, got: %v", err)
+	}
+
+	nextTx(stub, "tx-point-purchase-dup-order")
+	if _, err := contract.ConfirmPointPurchase(ctx, "pp_003", "ins_001", "10", "pay_003", "ord_001", "2026-05-15T00:07:00.000Z", "billing-system", "idem_purchase_003"); err == nil || !strings.Contains(err.Error(), "order already exists") {
+		t.Fatalf("expected duplicate order to be rejected, got: %v", err)
 	}
 }
 
