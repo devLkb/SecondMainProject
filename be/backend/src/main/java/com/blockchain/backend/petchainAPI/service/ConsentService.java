@@ -54,14 +54,16 @@ public class ConsentService implements ConsentApiPort {
 
     @Override
     @Transactional(readOnly = true)
-    public ConsentDtos.ConsentListResponse listConsents(ApiActor actor, String recordId, String guardianId, String insurerId) {
+    public ConsentDtos.ConsentListResponse listConsents(ApiActor actor, String recordId, String guardianId, String insurerId, String hospitalId) {
         // 프론트는 로그인 회원 본인 id를 모르고 userId만 갖고 있어 "me"를 보낸다 → 인증 액터로 치환한다.
         String gId = "me".equalsIgnoreCase(guardianId) ? String.valueOf(support.guardianByActor(actor).getId()) : guardianId;
         String iId = "me".equalsIgnoreCase(insurerId) ? String.valueOf(support.insurerByActor(actor).getId()) : insurerId;
+        String hId = "me".equalsIgnoreCase(hospitalId) ? String.valueOf(support.hospitalByActor(actor).getId()) : hospitalId;
         List<ClaimPackage> claims = claimPackageRepository.findAll().stream()
                 .filter(claim -> recordId == null || Objects.equals(claim.getMedicalRecord().getRecordId(), recordId))
                 .filter(claim -> gId == null || Objects.equals(String.valueOf(claim.getGuardian().getId()), gId) || Objects.equals(claim.getGuardian().getMemberNumber(), gId))
                 .filter(claim -> iId == null || Objects.equals(String.valueOf(claim.getInsuranceCompany().getId()), iId) || Objects.equals(claim.getInsuranceCompany().getMemberNumber(), iId))
+                .filter(claim -> hId == null || Objects.equals(String.valueOf(claim.getMedicalRecord().getHospital().getId()), hId) || Objects.equals(claim.getMedicalRecord().getHospital().getMemberNumber(), hId))
                 .toList();
         return new ConsentDtos.ConsentListResponse(claims.stream().map(this::toResponse).toList());
     }

@@ -32,6 +32,11 @@ public class PlatformAdminController {
         return ResponseEntity.ok(platformAdminService.approveOrg(actor, orgId));
     }
 
+    @PostMapping("/orgs/{orgId}/deactivate")
+    public ResponseEntity<PlatformDtos.OrgResponse> deactivateOrg(ApiActor actor, @PathVariable String orgId) {
+        return ResponseEntity.ok(platformAdminService.deactivateOrg(actor, orgId));
+    }
+
     @GetMapping("/monitor")
     public ResponseEntity<PlatformDtos.MonitorResponse> monitor(ApiActor actor) {
         return ResponseEntity.ok(platformAdminService.monitor(actor));

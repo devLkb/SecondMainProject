@@ -118,7 +118,6 @@ public class SubmissionService implements SubmissionApiPort {
     public SubmissionDtos.ClaimStatusResponse updateClaimStatus(ApiActor actor, String submissionId, SubmissionDtos.ClaimStatusRequest request) {
         ClaimPackage claim = support.claimBySubmissionId(submissionId);
         support.requireInsurerScope(actor, claim.getInsuranceCompany());
-        claim.setReviewNote(request.claimReferenceId());
         claim.setReviewResult(mapReviewResult(request.status()));
         claim.setClaimStatus(mapClaimStatus(request.status()));
         claim.setReviewedAt(java.time.LocalDateTime.now());

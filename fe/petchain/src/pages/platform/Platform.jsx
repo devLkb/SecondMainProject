@@ -21,6 +21,14 @@ export default function Platform({ showToast, onLogout }) {
   const [resolveCode, setResolveCode]   = useState('')
   const [resolveNote, setResolveNote]   = useState('')
 
+  // Org 관리 모달 (active 인 org 의 상세 + 비활성화)
+  const [orgModal, setOrgModal] = useState(null)
+
+  // 보험사 등록 모달
+  const [regModal, setRegModal] = useState(false)
+  const [regForm, setRegForm]   = useState({ name: '', businessNumber: '', fabricOrgId: '', adminEmail: '', password: '' })
+  const [regBusy, setRegBusy]   = useState(false)
+
   // 대시보드 진입 시 Org 목록 · 이상 신고 · 모니터링 집계를 백엔드에서 로드
   useEffect(() => {
     apiFetch('/admin/orgs')
@@ -58,6 +66,51 @@ export default function Platform({ showToast, onLogout }) {
     }
   }
 
+  // 관리 모달에서 활성 org 를 다시 승인 대기 상태로 되돌린다 (BE 가 user.status=SUSPENDED 처리).
+  const handleDeactivate = async (id) => {
+    try {
+      const updated = await apiFetch(`/admin/orgs/${id}/deactivate`, { method: 'POST' })
+      setState(s => ({
+        ...s,
+        orgs: s.orgs.map(o => o.id === id ? { ...o, ...updated, status: 'pending' } : o),
+      }))
+      showToast('Org 비활성화', `${id} — 승인 대기 상태로 변경됨`)
+      setOrgModal(null)
+    } catch (e) {
+      showToast('비활성화 실패', e?.message || 'Org 비활성화에 실패했습니다')
+    }
+  }
+
+  // 관리자가 보험사를 직접 등록한다. BE 는 신규 user.status=SUSPENDED 로 만들어주므로
+  // 등록 후엔 Org 목록에 'pending' 으로 나타나고, 같은 화면의 승인 버튼으로 활성화하면 된다.
+  const handleRegisterInsurer = async () => {
+    const { name, businessNumber, fabricOrgId, adminEmail, password } = regForm
+    if (!name || !businessNumber || !fabricOrgId || !adminEmail || !password) {
+      showToast('입력 오류', '모든 필드를 입력하세요'); return
+    }
+    if (password.length < 8) {
+      showToast('입력 오류', '비밀번호는 8자 이상이어야 합니다'); return
+    }
+    setRegBusy(true)
+    try {
+      await apiFetch('/auth/register/insurance', {
+        method: 'POST',
+        body: { name, businessNumber, fabricOrgId, adminEmail, password },
+      })
+      try {
+        const rows = await apiFetch('/admin/orgs')
+        if (Array.isArray(rows)) setState(s => ({ ...s, orgs: rows }))
+      } catch { /* 목록 갱신 실패해도 등록 자체는 성공 */ }
+      showToast('보험사 등록', `${name} 등록 완료 — 승인 대기`)
+      setRegModal(false)
+      setRegForm({ name: '', businessNumber: '', fabricOrgId: '', adminEmail: '', password: '' })
+    } catch (e) {
+      showToast('등록 실패', e?.message || '보험사 등록에 실패했습니다')
+    } finally {
+      setRegBusy(false)
+    }
+  }
+
   const handleIssue = async () => {
     if (!issueTarget) { showToast('오류', '대상 보험사를 선택하세요'); return }
     try {
@@ -92,15 +145,22 @@ export default function Platform({ showToast, onLogout }) {
       showToast('처리 실패', e?.message || '신고 처리에 실패했습니다')
       return
     }
-    setState(s => ({
-      ...s,
-      flaggedRecords: (s.flaggedRecords || []).map(f =>
-        f.flagId === resolveModal.flagId
-          ? { ...f, status: 'RESOLVED', resolveCode, resolveNote, resolvedAt: new Date().toLocaleString() }
-          : f
-      ),
-      txLog: [{ time: new Date().toLocaleTimeString(), type: '처리', org: 'platform', desc: `${resolveModal.recordId} — 이상 신고 처리 (${RESOLVE_OPTIONS.find(o => o.code === resolveCode)?.label})` }, ...s.txLog],
-    }))
+    // 처리 후 신고 목록을 BE 기준으로 다시 가져와서 다른 신고도 최신 상태로 본다.
+    try {
+      const rows = await apiFetch('/flags')
+      if (Array.isArray(rows)) setState(s => ({ ...s, flaggedRecords: rows, txLog: [{ time: new Date().toLocaleTimeString(), type: '처리', org: 'platform', desc: `${resolveModal.recordId} — 이상 신고 처리 (${RESOLVE_OPTIONS.find(o => o.code === resolveCode)?.label})` }, ...s.txLog] }))
+    } catch {
+      // 폴백: 로컬 상태만 갱신
+      setState(s => ({
+        ...s,
+        flaggedRecords: (s.flaggedRecords || []).map(f =>
+          f.flagId === resolveModal.flagId
+            ? { ...f, status: 'RESOLVED', resolveCode, resolveNote, resolvedAt: new Date().toLocaleString() }
+            : f
+        ),
+        txLog: [{ time: new Date().toLocaleTimeString(), type: '처리', org: 'platform', desc: `${resolveModal.recordId} — 이상 신고 처리 (${RESOLVE_OPTIONS.find(o => o.code === resolveCode)?.label})` }, ...s.txLog],
+      }))
+    }
     showToast('처리 완료', `${resolveModal.flagId} — ${RESOLVE_OPTIONS.find(o => o.code === resolveCode)?.label}`)
     setResolveModal(null)
     setResolveCode('')
@@ -154,7 +214,7 @@ export default function Platform({ showToast, onLogout }) {
                 <div className="pane-h">Org 관리</div>
                 <div className="pane-sub" style={{ marginBottom: 0 }}>병원·보험사 참여 승인 및 관리</div>
               </div>
-              <button className="btn btn-primary">+ Org 등록</button>
+              <button className="btn btn-primary" onClick={() => setRegModal(true)}>+ 보험사 등록</button>
             </div>
 
             {pendingOrgs > 0 && (
@@ -193,7 +253,7 @@ export default function Platform({ showToast, onLogout }) {
                       <td>
                         {o.status === 'pending'
                           ? <button className="btn btn-primary btn-sm" onClick={() => handleApprove(o.id)}>승인</button>
-                          : <button className="btn btn-ghost btn-sm">관리</button>}
+                          : <button className="btn btn-ghost btn-sm" onClick={() => setOrgModal(o)}>관리</button>}
                       </td>
                     </tr>
                   ))}
@@ -410,6 +470,124 @@ export default function Platform({ showToast, onLogout }) {
           </div>
         )}
       </div>
+
+      {/* ── Org 관리 모달 ── */}
+      {orgModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 32, width: '100%', maxWidth: 460, position: 'relative' }}>
+            <button
+              onClick={() => setOrgModal(null)}
+              style={{ position: 'absolute', top: 16, right: 18, background: 'none', border: 'none', fontSize: 22, color: '#a1a1aa', cursor: 'pointer' }}
+            >✕</button>
+
+            <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>Org 관리</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+              {orgModal.type} · {orgModal.name}
+            </div>
+
+            <div style={{ background: 'var(--bg-2)', borderRadius: 10, padding: '14px 16px', marginBottom: 20, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>Org ID</span>
+                <span className="mono">{orgModal.id}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>이름</span>
+                <span style={{ fontWeight: 600 }}>{orgModal.name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>유형</span>
+                <span className={`badge ${orgModal.type === '병원' ? 'badge-orange' : 'badge-brand'}`}>{orgModal.type}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>Fabric Org ID</span>
+                <span className="mono">{orgModal.fabricOrg}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>등록일</span>
+                <span>{orgModal.date}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>상태</span>
+                <span className="badge badge-success">활성</span>
+              </div>
+              {orgModal.type === '보험사' && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--muted)' }}>잔여 포인트</span>
+                    <span style={{ fontWeight: 700, color: 'var(--brand)' }}>{orgModal.balance ?? 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--muted)' }}>소모 포인트</span>
+                    <span style={{ fontWeight: 700, color: 'var(--danger)' }}>{orgModal.usedPoints ?? 0}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.6 }}>
+              📌 비활성화하면 해당 계정의 로그인이 차단되고 Org 가 '승인 대기' 상태로 돌아갑니다. 재활성화는 같은 행의 '승인' 버튼으로 처리하세요.
+            </div>
+
+            <button
+              className="btn btn-danger"
+              style={{ width: '100%', padding: 13, fontSize: 14, fontWeight: 700, justifyContent: 'center', background: 'var(--danger)', color: '#fff', borderColor: 'var(--danger)' }}
+              onClick={() => handleDeactivate(orgModal.id)}
+            >
+              비활성화 (승인 대기로 되돌리기)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 보험사 등록 모달 ── */}
+      {regModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 32, width: '100%', maxWidth: 480, position: 'relative' }}>
+            <button
+              onClick={() => setRegModal(false)}
+              style={{ position: 'absolute', top: 16, right: 18, background: 'none', border: 'none', fontSize: 22, color: '#a1a1aa', cursor: 'pointer' }}
+            >✕</button>
+
+            <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>보험사 등록</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+              등록 후 같은 화면의 '승인' 버튼으로 활성화하세요
+            </div>
+
+            <label className="fl">보험사명</label>
+            <input className="fi" placeholder="DB손해보험" value={regForm.name}
+              onChange={e => setRegForm(f => ({ ...f, name: e.target.value }))} />
+
+            <label className="fl">사업자등록번호</label>
+            <input className="fi" placeholder="000-00-00000" value={regForm.businessNumber}
+              onChange={e => setRegForm(f => ({ ...f, businessNumber: e.target.value }))} />
+
+            <label className="fl">Fabric Org ID (로그인 ID)</label>
+            <input className="fi" placeholder="db-insurance" value={regForm.fabricOrgId}
+              onChange={e => setRegForm(f => ({ ...f, fabricOrgId: e.target.value }))} />
+
+            <label className="fl">관리자 이메일</label>
+            <input className="fi" type="email" placeholder="admin@db-insurance.com" value={regForm.adminEmail}
+              onChange={e => setRegForm(f => ({ ...f, adminEmail: e.target.value }))} />
+
+            <label className="fl">비밀번호</label>
+            <input className="fi" type="password" placeholder="8자 이상" value={regForm.password}
+              onChange={e => setRegForm(f => ({ ...f, password: e.target.value }))} />
+
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.6 }}>
+              📌 보험사 회원가입 페이지는 따로 없습니다. 신규 보험사는 플랫폼 관리자가 직접 등록한 뒤 승인합니다.
+            </div>
+
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', padding: 13, fontSize: 14, fontWeight: 700, justifyContent: 'center' }}
+              onClick={handleRegisterInsurer}
+              disabled={regBusy}
+            >
+              {regBusy ? '등록 중…' : '보험사 등록'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── 이상 신고 처리 모달 ── */}
       {resolveModal && (

@@ -42,6 +42,23 @@ public class VerificationService implements VerificationApiPort {
         if (!claim.getMedicalRecord().getRecordId().equals(request.recordId())) {
             throw ApiException.validation("recordId가 제출 건과 일치하지 않습니다.", java.util.Map.of("recordId", request.recordId()));
         }
+
+        // Idempotent: 이미 verified 이고 동의가 여전히 active 일 때만 기존 verification_log 를 그대로 돌려준다.
+        // 같은 record 에 verify 가 N번 호출되어도 포인트가 한 번만 차감되도록 한다.
+        // consent 가 revoked 면 아래 일반 분기로 떨어져서 consent_revoked 로그를 새로 남기고 BLOCKED 응답을 낸다
+        // (이전 PASSED 응답을 재사용하면 보호자 동의 철회 후에도 비식별 데이터가 누출됨).
+        if ("verified".equalsIgnoreCase(claim.getClaimStatus())
+                && "active".equalsIgnoreCase(claim.getConsentStatus())) {
+            VerificationLog existing = verificationLogRepository.findByClaimPackage_Id(claim.getId()).stream()
+                    .filter(log -> "verified".equalsIgnoreCase(log.getResult()))
+                    .max(java.util.Comparator.comparing(VerificationLog::getRequestedAt))
+                    .orElse(null);
+            if (existing != null) {
+                // 이번 호출에선 실제로 차감/적립이 일어나지 않았으므로 pointsCharged=0, hospitalCredit=0 으로 응답한다.
+                return new PersistedVerification(existing).toResponse(true, true);
+            }
+        }
+
         if (!claim.getMedicalRecord().getDetailDataHash().equals(request.recordHash())) {
             return persistVerification(claim, request.requestedBy(), "hash_mismatch", 0).toResponse(false);
         }
@@ -161,18 +178,34 @@ public class VerificationService implements VerificationApiPort {
         }
 
         VerificationDtos.VerificationResponse toResponse(boolean success) {
+            return toResponse(success, false);
+        }
+
+        // idempotent=true 이면 이번 호출에서 새로 일어난 변화가 없다는 뜻이므로
+        // pointsCharged·hospitalCredit 을 0 으로, checks 에는 ALREADY_VERIFIED 를 표시한다.
+        VerificationDtos.VerificationResponse toResponse(boolean success, boolean idempotent) {
+            List<String> checks;
+            if (!success) {
+                checks = List.of();
+            } else if (idempotent) {
+                checks = List.of("CONSENT_ACTIVE", "RECORD_HASH_MATCHED", "ALREADY_VERIFIED");
+            } else {
+                checks = List.of("CONSENT_ACTIVE", "RECORD_HASH_MATCHED", "POINT_CHARGED");
+            }
+            int pointsCharged = idempotent ? 0 : log.getPointsSpent();
+            int hospitalCredit = (success && !idempotent) ? ApiDomainSupport.HOSPITAL_VERIFY_CREDIT : 0;
             return new VerificationDtos.VerificationResponse(
                     support.verificationId(log),
                     log.getClaimPackage().getClaimId(),
                     support.verificationStatus(log),
                     success,
                     support.failureReasons(log),
-                    success ? List.of("CONSENT_ACTIVE", "RECORD_HASH_MATCHED", "POINT_CHARGED") : List.of(),
+                    checks,
                     log.getClaimPackage().getMedicalRecord().getDetailDataHash(),
                     support.consentSnapshot(log.getClaimPackage()),
                     success ? support.deidentifiedData(log.getClaimPackage()) : null,
-                    log.getPointsSpent(),
-                    success ? ApiDomainSupport.HOSPITAL_VERIFY_CREDIT : 0,
+                    pointsCharged,
+                    hospitalCredit,
                     support.toInstant(log.getRequestedAt()),
                     "verification-" + log.getId()
             );

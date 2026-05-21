@@ -33,8 +33,8 @@ public class FlagController {
     }
 
     @GetMapping
-    public ResponseEntity<List<FlagDtos.FlagResponse>> listFlags() {
-        return ResponseEntity.ok(flagService.listFlags());
+    public ResponseEntity<List<FlagDtos.FlagResponse>> listFlags(ApiActor actor) {
+        return ResponseEntity.ok(flagService.listFlags(actor));
     }
 
     @PostMapping("/{flagId}/resolve")

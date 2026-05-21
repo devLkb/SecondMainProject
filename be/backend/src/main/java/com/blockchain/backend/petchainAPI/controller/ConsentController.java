@@ -40,8 +40,9 @@ public class ConsentController {
             @RequestParam(required = false) String recordId,
             @RequestParam(required = false) String guardianId,
             @RequestParam(required = false) String insurerId,
+            @RequestParam(required = false) String hospitalId,
             HttpServletRequest request) {
-        return ApiResponse.of(consentApiPort.listConsents(actor, recordId, guardianId, insurerId), request);
+        return ApiResponse.of(consentApiPort.listConsents(actor, recordId, guardianId, insurerId, hospitalId), request);
     }
 
     @GetMapping("/consents/{consentId}")

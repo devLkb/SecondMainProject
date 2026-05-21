@@ -92,7 +92,9 @@ const REGION_PINS = [
   { name:'제주특별자치도',x:148,y:502,label:'제주' },
 ]
 
-const speciesIcon = s => s==='강아지'?'🐶':s==='고양이'?'🐱':s==='토끼'?'🐰':'🐾'
+// BE는 dog|cat|rabbit 영문 코드를 저장하지만, 과거 한글 데이터도 함께 노출될 수 있다.
+const SPECIES_LABEL = { dog:'강아지', cat:'고양이', rabbit:'토끼', '강아지':'강아지', '고양이':'고양이', '토끼':'토끼' }
+const speciesIcon = s => (s==='dog'||s==='강아지') ? '🐶' : (s==='cat'||s==='고양이') ? '🐱' : (s==='rabbit'||s==='토끼') ? '🐰' : '🐾'
 
 /* ── ConsentCard ── */
 function ConsentCard({ c, onToggle }) {
@@ -764,7 +766,7 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
           if (me.phone)  patch.userPhone = me.phone
           if (Object.keys(patch).length) update(patch)
         }
-        if (petsRes.status==='fulfilled') { const a=Array.isArray(petsRes.value)?petsRes.value:[]; if(a.length>0) update({ pets:a.map(p=>({ petId:p.petNumber||String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:'DB손해보험' })) }) }
+        if (petsRes.status==='fulfilled') { const a=Array.isArray(petsRes.value)?petsRes.value:[]; if(a.length>0) update({ pets:a.map(p=>({ petId:p.petNumber||String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:'' })) }) }
         if (recordsRes.status==='fulfilled') { const a=Array.isArray(recordsRes.value?.records)?recordsRes.value.records:(Array.isArray(recordsRes.value?.content)?recordsRes.value.content:[]); if(a.length>0) update({ medicalRecords:a.map(r=>({ id:String(r.recordId||r.id),petId:String(r.petId||''),petName:r.petName||'',date:(r.treatmentDate||r.date||'').replaceAll('-','.'),diseases:Array.isArray(r.diagnosisCodes)?r.diagnosisCodes:(Array.isArray(r.diseases)?r.diseases:[]),treatments:Array.isArray(r.treatmentCodes)?r.treatmentCodes:(Array.isArray(r.treatments)?r.treatments:[]),cost:r.treatmentCost||r.cost||0,memo:r.memo||'',onChain:!!(r.recordHash||r.onChain) })) }) }
         if (consentsRes.status==='fulfilled') { const a=Array.isArray(consentsRes.value?.consents)?consentsRes.value.consents:(Array.isArray(consentsRes.value?.content)?consentsRes.value.content:[]); if(a.length>0){const sm={ACTIVE:'active',REVOKED:'revoked',PENDING:'pending'};const m={};a.forEach(c=>{const k=String(c.recordId);m[k]={consentId:String(c.consentId||c.id),recordId:k,guardianId:c.guardianId,insurerId:c.insurerId,status:sm[c.status]||(c.status||'').toLowerCase(),insurerName:c.insurerName||c.insurerId||'',pet:c.petName||'',disease:c.disease||'',hospital:c.hospitalName||'',cost:c.cost||0}});update({consents:m})} }
       } catch { /* fallback */ }
@@ -791,12 +793,12 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
     setNewPet({name:'',species:'dog',breed:'',birthYear:'',chipNo:'',petId}); setModal('pet')
   }
   const handleAddPet = async () => {
-    const sm={dog:'강아지',cat:'고양이',rabbit:'토끼'}
-    addPet({petId:newPet.petId,name:newPet.name,species:sm[newPet.species]||newPet.species,breed:newPet.breed,birthYear:newPet.birthYear?Number(newPet.birthYear):'',chipNo:newPet.chipNo,insurer:'DB손해보험'})
+    // BE 가 dog|cat|rabbit 영문 코드를 기대하므로 그대로 전송하고, 화면 표시만 한글로 변환한다.
+    addPet({petId:newPet.petId,name:newPet.name,species:newPet.species,breed:newPet.breed,birthYear:newPet.birthYear?Number(newPet.birthYear):'',chipNo:newPet.chipNo,insurer:''})
     setModal(null); showToast('반려동물 등록',(newPet.name||'새 반려동물')+' 등록 완료')
     try {
-      const created=await apiFetch('/pets',{method:'POST',body:{name:newPet.name,species:sm[newPet.species]||newPet.species,breed:newPet.breed,birthYear:newPet.birthYear?Number(newPet.birthYear):undefined,gender:'',isNeutered:false}})
-      if(created?.id){const refreshed=await apiFetch('/pets');const a=Array.isArray(refreshed)?refreshed:[];if(a.length>0)update({pets:a.map(p=>({petId:p.petNumber||String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:'DB손해보험'}))})}
+      const created=await apiFetch('/pets',{method:'POST',body:{name:newPet.name,species:newPet.species,breed:newPet.breed,birthYear:newPet.birthYear?Number(newPet.birthYear):undefined,gender:'',isNeutered:false}})
+      if(created?.id){const refreshed=await apiFetch('/pets');const a=Array.isArray(refreshed)?refreshed:[];if(a.length>0)update({pets:a.map(p=>({petId:p.petNumber||String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:''}))})}
     } catch { /* 서버 미연결 시 로컬 상태만 갱신 */ }
   }
 
@@ -857,7 +859,10 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
                 ))}
               </div>
               <div className="g3">
-                {state.pets.map((p,i) => (
+                {state.pets.map((p,i) => {
+                  const speciesLabel = SPECIES_LABEL[p.species] || p.species
+                  const hasInsurer = !!p.insurer
+                  return (
                   <div key={i} className="card" style={{ borderTop:'2px solid var(--brand)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:18 }}>
                       <div style={{ width:50, height:50, borderRadius:12, background:'var(--brand-xl)', border:'1px solid var(--brand-l)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24 }}>{speciesIcon(p.species)}</div>
@@ -867,17 +872,18 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
                           <span style={{ fontSize:10, fontWeight:700, color:'var(--brand)', letterSpacing:'.04em' }}>PETCHAIN ID</span>
                           <span className="mono" style={{ fontSize:12, fontWeight:600, color:'var(--brand)' }}>{p.petId}</span>
                         </div>
-                        <div style={{ fontSize:14, color:'var(--muted)', marginTop:4 }}>{p.species} · {p.breed}</div>
+                        <div style={{ fontSize:14, color:'var(--muted)', marginTop:4 }}>{speciesLabel} · {p.breed}</div>
                       </div>
-                      <span className="badge badge-success">보험 활성</span>
+                      <span className={`badge ${hasInsurer?'badge-success':'badge-muted'}`}>{hasInsurer?'보험 활성':'보험 미등록'}</span>
                     </div>
                     <div className="divider" />
-                    <div className="row-flex"><span style={{ color:'var(--muted)' }}>보험사</span><span style={{ fontWeight:500 }}>{p.insurer}</span></div>
+                    <div className="row-flex"><span style={{ color:'var(--muted)' }}>보험사</span><span style={{ fontWeight:500, color: hasInsurer ? 'var(--text)' : 'var(--muted)' }}>{p.insurer || '미등록'}</span></div>
                     <div className="row-flex"><span style={{ color:'var(--muted)' }}>동의 활성</span><span style={{ fontWeight:500, color:'var(--success)' }}>{activeCount}건</span></div>
                     <div className="row-flex"><span style={{ color:'var(--muted)' }}>출생연도</span><span style={{ fontWeight:500 }}>{p.birthYear}년</span></div>
                     <button className="btn btn-primary btn-sm" style={{ width:'100%', marginTop:16, justifyContent:'center' }} onClick={() => setTab('records')}>📋 진료기록 확인</button>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}

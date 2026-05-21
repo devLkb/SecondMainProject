@@ -6,7 +6,7 @@ import com.blockchain.backend.petchainAPI.security.ApiActor;
 public interface ConsentApiPort {
     ConsentDtos.ConsentResponse createConsent(ApiActor actor, ConsentDtos.CreateConsentRequest request);
 
-    ConsentDtos.ConsentListResponse listConsents(ApiActor actor, String recordId, String guardianId, String insurerId);
+    ConsentDtos.ConsentListResponse listConsents(ApiActor actor, String recordId, String guardianId, String insurerId, String hospitalId);
 
     ConsentDtos.ConsentResponse getConsent(ApiActor actor, String consentId);
 
