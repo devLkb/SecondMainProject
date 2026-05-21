@@ -62,9 +62,10 @@ MVP에서 `recordHash`, `attachmentHashes`, `consentSnapshotHash`, `auditLogHash
 | 해시 표기 | `sha256:<lowercase 64 hex>`로 통일. 예: `sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef` |
 | 인코딩 | UTF-8 |
 | 유니코드 | 모든 문자열은 해시 입력 전 NFC로 정규화. 병원명, 보호자/반려동물 이름, `memo`처럼 한글이 들어갈 수 있는 필드는 예외 없음 |
-| 객체 키 | 모든 객체 키를 유니코드 코드포인트 기준 오름차순으로 정렬 |
+| 문자열 직렬화 | 필수 이스케이프(`"`, `\`, 제어문자 U+0000–U+001F)만 사용. 비ASCII 문자는 `\uXXXX`가 아니라 리터럴 UTF-8로 출력하고 `/`는 이스케이프하지 않는다. NFC는 *문자*를 통일할 뿐 *직렬화 표현*을 통일하지 못하므로 이 규칙이 없으면 같은 값이 다른 바이트로 직렬화될 수 있다. 본 규칙은 RFC 8785(JSON Canonicalization Scheme)의 문자열 직렬화와 호환되며, 구현 시 RFC 8785를 그대로 채택해도 된다 |
+| 객체 키 | 모든 객체 키를 유니코드 코드포인트 기준 오름차순으로 정렬한다. 중첩 객체에도 재귀적으로 적용한다 |
 | 공백 | 해시 입력 문자열에서 불필요한 공백, 줄바꿈, 들여쓰기 제거 |
-| `null` | 값이 `null`인 필드는 canonical payload에서 생략 |
+| `null` / 빈 배열 | 값이 `null`인 필드는 canonical payload에서 생략한다. 빈 배열(`[]`)은 생략하지 않고 `[]`로 유지한다(필수 배열 필드와 "값 없음"을 구분하기 위함) |
 | 날짜/시각 | ISO 8601 UTC 형식으로 고정. 예: `2026-05-19T10:00:00Z` |
 | 배열 | 의미상 순서가 없는 배열은 안정 정렬. 코드 배열은 문자열 오름차순, 첨부 메타 배열은 `attachmentId` → `fileName` 순, 감사 로그 참조 배열은 `auditLogId` 순 |
 | 숫자 | JSON 숫자 표기는 정수만 허용. 지수 표기, 소수점 표기, 문자열 금액 금지 |
@@ -153,7 +154,7 @@ API가 `BigDecimal treatmentCost`를 받더라도 다음 규칙을 적용한다.
 | `recordId` | 필수 | 동의 대상 진료기록 |
 | `guardianId` | 필수 | 보호자 식별자. 실명·전화번호는 넣지 않음 |
 | `insurerId` | 필수 | 자료를 열람할 보험사 |
-| `status` | 필수 | `ACTIVE`, `REVOKED`, `EXPIRED` 등 enum 값 |
+| `status` | 필수 | `ACTIVE`, `REVOKED`, `EXPIRED` 세 값으로 고정한 닫힌 enum. 해시 입력에 들어가므로 새 값은 해시 계약 버전을 올릴 때만 추가 가능 |
 | `consentedAt` | 필수 | UTC ISO 8601 |
 | `expiresAt` | 선택 | UTC ISO 8601 |
 | `revokedAt` | 선택 | UTC ISO 8601. 철회 전이면 생략 |
@@ -162,21 +163,25 @@ API가 `BigDecimal treatmentCost`를 받더라도 다음 규칙을 적용한다.
 
 `auditLogHash = SHA-256(canonicalAuditLogPayload)`로 정의한다. 감사 로그 해시는 오프체인 감사 로그 원문을 온체인 참조와 연결하기 위한 값이며, 온체인에는 민감한 설명문이나 병원 메모를 올리지 않는다.
 
+**감사 로그의 다수성.** 한 제출(`submissionId`)에는 조회·검증·철회 등 여러 감사 이벤트가 시계열로 쌓인다. 따라서 감사 로그 원문 전체는 오프체인 감사 로그 DB에 이벤트별 행으로 보관하고, 온체인에는 이벤트가 발생할 때마다 해당 이벤트의 `auditLogId`/`auditLogHash`를 append한다. 제출 패키지 응답(6장)에 담기는 단수 `auditLogId`/`auditLogHash`는 "전체 이력"이 아니라 **그 패키지 조회/검증 이벤트 1건**을 가리키며, 전체 이력이 필요하면 감사 로그 목록 조회 API로 따로 가져온다.
+
+**구현 의존성(scope).** `auditLogHash`는 감사 로그가 실제로 오프체인 DB에 영속화되어야 계산할 수 있다. 현재 백엔드에는 감사 로그 저장 경로가 없으므로(7장 "차이" 참고), `auditLogId`/`auditLogHash`는 **감사 로그 영속화가 선행된 뒤에 활성화되는 필드**다. 4장 온체인 항목에서 이 필드는 "감사 로그 구현 완료 시 활성화"를 전제로 한 필수 항목으로 읽어야 한다.
+
 `canonicalAuditLogPayload`의 필드는 다음으로 고정한다.
 
 | 필드 | 필수 여부 | 규칙 |
 |---|---:|---|
 | `hashContractVersion` | 필수 | 항상 `"hash-contract-v1"` |
 | `auditLogId` | 필수 | 감사 로그 식별자. `submissionId`나 `claimId` 재사용 금지 |
-| `eventType` | 필수 | 예: `SUBMISSION_VIEWED`, `VERIFICATION_REQUESTED`, `VERIFICATION_FAILED` |
+| `eventType` | 필수 | `SUBMISSION_VIEWED`, `VERIFICATION_REQUESTED`, `VERIFICATION_SUCCEEDED`, `VERIFICATION_FAILED`, `CONSENT_REVOKED` 다섯 값으로 고정한 닫힌 enum |
 | `actorId` | 선택 | 행위자 식별자. 실명 대신 내부 식별자 사용 |
 | `actorOrgId` | 선택 | 병원/보험사 조직 식별자 |
-| `actorRole` | 선택 | `HOSPITAL`, `INSURER`, `SYSTEM` 등 enum 값 |
-| `resourceType` | 필수 | 예: `submission`, `record`, `verification` |
+| `actorRole` | 선택 | `HOSPITAL`, `INSURER`, `SYSTEM` 세 값으로 고정한 닫힌 enum |
+| `resourceType` | 필수 | `submission`, `record`, `verification` 세 값으로 고정한 닫힌 enum |
 | `resourceId` | 필수 | 대상 리소스 식별자 |
 | `submissionId` | 선택 | 제출 관련 이벤트이면 포함 |
 | `verificationId` | 선택 | 검증 관련 이벤트이면 포함 |
-| `result` | 필수 | `SUCCESS`, `FAILED`, `BLOCKED` 등 enum 값 |
+| `result` | 필수 | `SUCCESS`, `FAILED`, `BLOCKED` 세 값으로 고정한 닫힌 enum |
 | `failureReasonCodes` | 선택 | 실패 시 enum 코드 배열, 문자열 오름차순 정렬 |
 | `createdAt` | 필수 | UTC ISO 8601 |
 | `metadataHash` | 선택 | 상세 metadata가 민감하거나 자유 JSON이면 원문 대신 별도 canonical metadata의 SHA-256만 포함 |
@@ -255,8 +260,10 @@ MVP enum 코드는 다음과 같다.
 | 4 | 트랜잭션 참조 | `blockchainReference`, `fabricTxId`, `verifyTxId` | Fabric 기록 참조와 원문/첨부 해시로 검증 흐름을 연결 |
 | 5 | 동의/상태 | `consentId`, `consentSnapshotHash`, `status`, `claimStatus`, `submittedAt`, `updatedAt`, `verifiedAt` | 동의가 있는 제출인지, 현재 처리 상태가 무엇인지 확인 |
 | 6 | 검증 결과 코드 | `verificationStatus`, `failureReasonCodes` | 검증 통과/실패와 실패 원인을 enum 코드로만 남김 |
-| 7 | 감사 로그 참조/해시 | `auditLogId`, `auditLogHash` | 분쟁 시 오프체인 감사 로그와 온체인 기록을 연결 |
+| 7 | 감사 로그 참조/해시 | `auditLogId`, `auditLogHash` | 분쟁 시 오프체인 감사 로그와 온체인 기록을 연결. **감사 로그 영속화가 선행돼야 활성화되는 필드**이며, 이벤트마다 append된다(2장 "감사 로그의 다수성" 참고) |
 | 8 | 버전/스키마 정보 | `hashContractVersion` | canonical hash 규칙 변경을 구분. 체인코드 저장 구조 자체의 버전이 필요하면 해시 입력과 분리된 별도 운영 필드로 관리 |
+
+> ⚠️ 7번(`auditLogId`/`auditLogHash`)은 감사 로그 저장 경로가 구현된 뒤에야 채울 수 있다. 감사 로그 영속화를 MVP scope에 포함하지 않는다면 7번은 "후속 활성화" 항목으로 두고, 그 외 1~6·8번부터 온체인에 올린다.
 
 ### 온체인 낮은 우선순위 정보
 
@@ -307,7 +314,9 @@ MVP enum 코드는 다음과 같다.
 
 제출 패키지에서 `submissionId`, `consentId`, `auditLogId`, `verificationId`, `recordId`는 각각 독립된 식별자다. 동의는 제출 전에 존재할 수 있으므로 `consentId`를 `submissionId`로 재사용하면 안 된다. 감사 로그는 한 제출에서 여러 건 생길 수 있으므로 `auditLogId`도 제출 식별자와 분리해야 한다.
 
-현재 백엔드의 `SubmissionPackageResponse` 기준 제출 패키지는 다음 정보를 포함한다. 진료비와 진료/진단 코드는 제출 패키지 응답 본문이 아니라 검증 응답의 `deidentifiedVerificationData`에서 제공된다.
+아래 표는 **목표 설계 기준** 제출 패키지 구성이다. 진료비와 진료/진단 코드는 제출 패키지 응답 본문이 아니라 검증 응답의 `deidentifiedVerificationData`에서 제공된다.
+
+> 현재 백엔드의 `SubmissionPackageResponse`는 이 표와 다음이 다르다. 아래 표의 `consentSnapshotHash`, `auditLogHash`, `verificationResult`의 `failureReasonCodes`는 **현재 응답에 없는 목표 전용 필드**다. 현재 응답은 `consentSnapshot`(해시 없음)과 `failureReasons`(배열)만 담고, `auditLogId` 자리에는 `claimId`가 재사용된다(7장 "차이" 참고).
 
 | 구분 | 필드 | 설명 |
 |---|---|---|
@@ -415,6 +424,7 @@ MVP 구현은 다음처럼 단순화하는 것이 좋다.
 현재 구현은 목표 설계를 완전히 충족하지 않는다. MVP 문서에서는 새로 만드는 올바른 설계를 기준으로 삼고, 아래 차이는 후속 구현 과제로 분리한다.
 
 - 현재 `RecordService`는 구조화 JSON이 아니라 record file bytes를 해시한다. 목표 설계에서는 `recordHash = SHA-256(canonicalRecordPayload)`를 사용한다.
+- `recordVersion`은 `canonicalRecordPayload`의 필수 필드지만 현재 `MedicalRecord` 엔티티에는 해당 컬럼이 없다. 해시를 나중에 재계산·검증하려면 payload의 모든 필드가 영속화돼야 하므로, `MedicalRecord`에 `recordVersion` 컬럼을 신설해야 한다(생성 시 `1`).
 - 현재 DB는 `totalCost` 정수, DTO는 `BigDecimal treatmentCost`를 사용한다. 목표 설계에서는 canonical hash 입력 전 scale 0 원화 정수로 변환하고 해시 입력 필드명은 `treatmentCostKrw` 하나로 고정한다.
 - 현재 일부 응답은 `claimId`를 `consentId`/`auditLogId`처럼 재사용한다. 목표 설계에서는 `submissionId`, `consentId`, `auditLogId`, `verificationId`, `recordId`를 모두 독립 식별자로 둔다.
 - 현재 체인코드는 `sha256:<hex>` 형식을 요구하지만 백엔드 일부 해시는 raw hex일 수 있다. 목표 설계에서는 모든 해시 표기를 `sha256:<lowercase 64 hex>`로 통일한다.

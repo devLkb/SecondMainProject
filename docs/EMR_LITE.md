@@ -65,17 +65,13 @@ HashContract.hashBytes(byte[])       // raw bytes → "sha256:<hex>" (첨부 파
 | `petId` | 필수 | 반려동물 식별자 |
 | `treatmentDate` | 필수 | UTC ISO 8601. 날짜만 입력해도 `T00:00:00Z`로 정규화 |
 | `treatmentCostKrw` | 필수 | 원화 정수 원 단위 |
-| `treatmentCodes` | 필수 | 문자열 배열, 오름차순 정렬. 진료 코드는 농림축산식품부 표준안을 따름 |
+| `treatmentCodes` | 필수 | 문자열 배열, 오름차순 정렬 |
 | `diagnosisCodes` | 필수 | 문자열 배열, 오름차순 정렬 |
 | `insurerId` | 선택 | 제출 대상 보험사. 값이 있을 때만 포함 |
 | `memo` | 선택 | 병원 자유기재 메모 |
 | `metadata` | 선택 | `source`, `externalRecordId` 키만 허용 |
 
 키 정렬·NFC·공백 제거·`null` 생략은 `HashContract`가 처리하므로, 서비스 코드는 필드만 채운다.
-
-### 진료 코드 기준
-
-`treatmentCodes`에 입력하는 진료 코드는 농림축산식품부의 표준안을 따른다. EMR-lite는 표준안에 정의된 코드 문자열을 canonical payload에 그대로 포함하고, 해시 안정성을 위해 오름차순 정렬한 뒤 `recordHash` 산출에 사용한다.
 
 ### 예시 payload
 

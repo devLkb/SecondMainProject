@@ -43,12 +43,14 @@ $H = @{ Authorization = "Bearer $($login.accessToken)" }
 | 시드 자동생성 | `users` `hospitals` `insurance_companies` `disease_codes` `treatment_codes` `point_balances` |
 | 회원/인증 | `users` `guardians` `hospitals` `insurance_companies` `refresh_tokens` |
 | 반려동물/진료 | `pets` `medical_records` `medical_record_diseases` `medical_record_treatments` `medical_record_files` |
-| 동의/청구/검증 | `consent_history` `pet_insurance` `claim_packages` `verification_logs` `audit_logs` |
+| 동의/청구/검증 | `pet_insurance` `claim_packages` `verification_logs` |
 | 포인트 | `point_balances` `point_transactions` |
 | 커뮤니티 | `posts` `post_images` `post_likes` `post_comments` |
-| 미구현 | `nft_tokens` |
+| 미구현 (저장 경로 없음) | `consent_history` `audit_logs` `nft_tokens` |
 
-**권장 테스트 순서:** 1 → 2 → 3 → 4 → 5 → 6 (의존관계 때문에 순서 중요)
+**권장 테스트 순서:** 1 → 2 → 3 → 6 → (4·5 혼합) (의존관계 때문에 순서 중요)
+> ⚠️ 4번 검증(4-4)은 보험사 포인트가 있어야 성공하므로 **5-1 을 4-4 보다 먼저** 실행해야 한다.
+> 실제 순서: `4-1 → 4-3 → 5-1 → 4-4 → 4-5`. 자세한 내용은 4번 섹션 머리말 참고.
 
 ---
 
@@ -199,8 +201,26 @@ q "SELECT * FROM medical_record_files ORDER BY id DESC LIMIT 5;"
 ## 4. 동의 · 보험금 청구 · 검증
 
 > 3번에서 만든 `recordId` 와 보험사 식별자가 필요. 응답 JSON에서 ID를 확보해 다음 단계에 넣을 것.
+>
+> ⚠️ **이 섹션은 실행 순서가 중요하다.** 검증(4-4)은 보험사 포인트 잔액이 있어야 성공하므로
+> **5-1(보험사 포인트 발행)을 먼저 실행**한 뒤 4-4를 호출해야 한다.
+> 권장 순서: `4-1 → 4-3 → 5-1 → 4-4 → 4-5`
+>
+> ⚠️ **`consent_history` / `audit_logs` 는 현재 코드에 저장 경로가 없다.** 엔티티·리포지토리는
+> 존재하지만 어떤 서비스도 `save` 를 호출하지 않으므로 이 두 테이블은 **항상 비어 있는 게 정상**이다.
+> (`ConsentService` 는 `claim_packages` 를, 검증은 `verification_logs` 만 채운다.)
 
-### 4-1. 정보제공 동의 생성 → `consent_history` (+ `pet_insurance`)
+### 4-0. 보험사 로그인 토큰 준비
+청구 제출(4-3)과 검증(4-4)은 **보험사 토큰**이 필요하다. 미리 발급해 둔다.
+```powershell
+$i = Invoke-RestMethod -Uri http://localhost:8080/api/auth/login -Method Post `
+  -ContentType 'application/json; charset=utf-8' `
+  -Body '{"loginId":"insurance-samsung","password":"insurance1234"}'
+$IH = @{ Authorization = "Bearer $($i.accessToken)" }
+```
+
+### 4-1. 정보제공 동의 생성 → `claim_packages` (+ `pet_insurance`)
+보호자 토큰(`$GH`) 필요. 엔드포인트 이름은 `consents` 지만 실제 저장 테이블은 `claim_packages` 다.
 ```powershell
 Invoke-RestMethod -Uri http://localhost:8080/api/consents -Method Post -Headers $GH `
   -ContentType 'application/json; charset=utf-8' -Body '{
@@ -209,49 +229,79 @@ Invoke-RestMethod -Uri http://localhost:8080/api/consents -Method Post -Headers 
     "guardianId":"<보호자ID>"
   }'
 ```
+- 응답의 `consentId`(= `claimId`) 를 다음 단계용으로 확보할 것.
 - 확인:
 ```powershell
-q "SELECT * FROM consent_history ORDER BY id DESC LIMIT 1;"
+q "SELECT * FROM claim_packages ORDER BY id DESC LIMIT 1;"   -- consent_status='active' 로 생성됨
 q "SELECT * FROM pet_insurance ORDER BY id DESC LIMIT 1;"
+-- consent_history 는 비어 있음(미구현). 조회해도 0건이 정상.
 ```
 
-### 4-2. 동의 철회 → `consent_history` 상태 변경
+### 4-2. 동의 철회 → `claim_packages.consent_status` 변경
 ```powershell
 Invoke-RestMethod -Uri "http://localhost:8080/api/consents/<동의ID>/revoke" -Method Post -Headers $GH `
   -ContentType 'application/json; charset=utf-8' -Body '{"reason":"테스트 철회"}'
 ```
+- 확인: `q "SELECT claim_id, consent_status, claim_status FROM claim_packages ORDER BY id DESC LIMIT 1;"`
+  `consent_status` 가 `revoked` 로 바뀐다. (`consent_history` 에는 이력이 남지 않음 — 미구현)
+- ⚠️ 철회하면 4-3/4-4 가 막히므로, 청구·검증을 테스트하려면 4-2 는 건너뛰거나 마지막에 실행할 것.
 
 ### 4-3. 보험금 청구 제출 → `claim_packages` (+ `pet_insurance`)
+⚠️ **보험사 토큰(`$IH`) 필요.** 코드(`SubmissionService`)가 인증 액터에서 보험사를 도출하고
+보험사 권한(`requireInsurerScope`)을 요구하므로 병원 토큰으로 호출하면 권한 오류가 난다.
 ```powershell
-Invoke-RestMethod -Uri http://localhost:8080/api/submissions -Method Post -Headers $HH `
+Invoke-RestMethod -Uri http://localhost:8080/api/submissions -Method Post -Headers $IH `
   -ContentType 'application/json; charset=utf-8' -Body '{
     "recordId":"<진료기록ID>",
     "insurerId":"<보험사ID>"
   }'
 ```
+- 활성 동의(4-1)가 없으면 `CONSENT_MISSING` 오류가 난다. 4-1 을 먼저 실행할 것.
 - 확인: `q "SELECT * FROM claim_packages ORDER BY id DESC LIMIT 1;"`
 
-### 4-4. 검증 실행 → `verification_logs` (+ `audit_logs`)
+### 4-4. 검증 실행 → `verification_logs`
+⚠️ **보험사 토큰(`$IH`) 필요**, 그리고 **5-1 을 먼저 실행해 보험사 포인트 잔액을 확보**해야 한다
+(잔액 0이면 `INSUFFICIENT_POINTS` 오류).
+요청 body 는 **필수 필드가 많고**, `recordHash` 는 진료기록의 실제 해시와 일치해야 한다.
+
+먼저 진료기록 해시를 조회한다:
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/submissions/<청구ID>/verification" -Method Post -Headers $HH
-# 또는 내부 검증 엔드포인트
-Invoke-RestMethod -Uri "http://localhost:8080/api/internal/submissions/<청구ID>/verify" -Method Post -Headers $HH
+q "SELECT record_id, detail_data_hash FROM medical_records ORDER BY id DESC LIMIT 1;"
+```
+검증 요청 (`<청구ID>` = 4-1/4-3 의 `claimId`, path 와 body 의 `submissionId` 가 일치해야 함):
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8080/api/submissions/<청구ID>/verification" -Method Post -Headers $IH `
+  -ContentType 'application/json; charset=utf-8' -Body '{
+    "submissionId":"<청구ID>",
+    "recordId":"<진료기록ID>",
+    "hospitalId":"<병원ID>",
+    "insurerId":"<보험사ID>",
+    "consentId":"<동의ID>",
+    "recordHash":"<medical_records.detail_data_hash 값>",
+    "requestedBy":"insurance-samsung",
+    "requestedAt":"2026-05-19T00:00:00Z"
+  }'
 ```
 - 확인:
 ```powershell
-q "SELECT * FROM verification_logs ORDER BY id DESC LIMIT 1;"
-q "SELECT * FROM audit_logs ORDER BY id DESC LIMIT 5;"
+q "SELECT * FROM verification_logs ORDER BY id DESC LIMIT 1;"   -- result='verified' 면 성공
+q "SELECT * FROM point_transactions ORDER BY id DESC LIMIT 1;"  -- 검증 시 spend 거래 발생
+-- audit_logs 는 비어 있음(미구현). 조회해도 0건이 정상.
 ```
+> 참고: `/api/internal/submissions/<청구ID>/verify` 엔드포인트도 있지만, 이쪽은 DTO 응답만
+> 반환하고 `verification_logs` 를 포함해 **DB에 아무것도 저장하지 않는다.** 테이블 채우기 테스트에는 쓰지 말 것.
 
 ### 4-5. 청구 심사 상태 변경 → `claim_packages` 상태
+⚠️ **보험사 토큰(`$IH`) 필요** (코드가 `requireInsurerScope` 를 요구함).
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/submissions/<청구ID>/claim-status" -Method Post -Headers $H `
+Invoke-RestMethod -Uri "http://localhost:8080/api/submissions/<청구ID>/claim-status" -Method Post -Headers $IH `
   -ContentType 'application/json; charset=utf-8' -Body '{
     "status":"APPROVED_BY_INSURER",
     "disclosable":true,
     "claimReferenceId":"CLM-TEST-001"
   }'
 ```
+- 확인: `q "SELECT claim_id, claim_status, review_result FROM claim_packages ORDER BY id DESC LIMIT 1;"`
 
 ---
 
@@ -331,11 +381,18 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/posts/<게시글ID>/images" -M
 
 ---
 
-## 7. ⚠️ nft_tokens — 테스트 불가 (미구현)
+## 7. ⚠️ 미구현 테이블 — 테스트 불가 (항상 비어 있음)
 
-`nft_tokens` 테이블은 생성되지만, **현재 코드에 데이터를 저장하는 경로가 없음.**
-`NftToken` 엔티티와 `NftTokenRepository`만 존재하고 어떤 서비스도 `save`를 호출하지 않음.
-→ NFT 발급 기능이 미구현 상태. 이 테이블은 항상 비어 있는 게 정상.
+아래 3개 테이블은 생성되지만 **현재 코드에 데이터를 저장하는 경로가 없다.**
+엔티티와 리포지토리는 존재하지만 어떤 서비스도 `save` 를 호출하지 않으므로 항상 0건인 게 정상이다.
+
+| 테이블 | 상태 | 비고 |
+|---|---|---|
+| `consent_history` | 미구현 | `ConsentService` 가 `claim_packages` 만 갱신. 동의 이력을 별도 저장하지 않음 |
+| `audit_logs` | 미구현 | 검증 감사 응답은 `ApiDomainSupport` 가 동적으로 만든 DTO. DB 저장 없음 |
+| `nft_tokens` | 미구현 | `NftToken` / `NftTokenRepository` 만 존재. NFT 발급 기능 자체가 미구현 |
+
+→ 이 3개 테이블을 채우려면 **코드 수정이 필요**하다. 문서만으로는 테스트 불가.
 
 ---
 
@@ -365,12 +422,12 @@ q "DROP DATABASE petchain; CREATE DATABASE petchain CHARACTER SET utf8mb4 COLLAT
 - [ ] 2-4. refresh_tokens
 - [ ] 3-1. pets
 - [ ] 3-2. medical_records / medical_record_diseases / medical_record_treatments / medical_record_files
-- [ ] 4-1. consent_history / pet_insurance
-- [ ] 4-3. claim_packages
-- [ ] 4-4. verification_logs / audit_logs
+- [ ] 4-1. claim_packages / pet_insurance  (consent_history 는 미구현 — 항상 0건)
+- [ ] 4-3. claim_packages  (보험사 토큰 필요)
+- [ ] 4-4. verification_logs  (5-1 선행 필수 / audit_logs 는 미구현 — 항상 0건)
 - [ ] 5-1. point_transactions / point_balances
 - [ ] 6-1. posts
 - [ ] 6-2. post_likes
 - [ ] 6-3. post_comments
 - [ ] 6-4. post_images
-- [ ] 7. nft_tokens — 미구현 (테스트 제외)
+- [ ] 7. consent_history / audit_logs / nft_tokens — 미구현 (테스트 제외)
