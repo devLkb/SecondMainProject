@@ -49,8 +49,8 @@ const STYLE = `
   position: relative; padding: 96px 72px; display: flex; flex-direction: column;
   justify-content: flex-end; overflow: hidden;
 }
-.lp-hero-left  { background: #12203a; }
-.lp-hero-right { background: #1a2e1a; }
+.lp-hero-left  { background: #12203a; padding-right: 104px; }
+.lp-hero-right { background: #1a2e1a; padding-left: 104px; }
 .lp-hero-panel::before {
   content: ''; position: absolute; inset: 0;
   background:
@@ -403,11 +403,6 @@ const GUARDIAN_NAV = [
 
 export default function Landing({ onGoAuth, role, onGoMain, onLogout }) {
   const [openFaq, setOpenFaq] = useState(null)
-
-  const scrollTo = (id) => {
-    const el = document.getElementById(id)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
 
   return (
     <div className="lp-root">
