@@ -33,6 +33,98 @@ func (c *PetChainContract) IssuePoints(ctx contractapi.TransactionContextInterfa
 	return toJson(tx)
 }
 
+func (c *PetChainContract) ConfirmPointPurchase(ctx contractapi.TransactionContextInterface, purchaseId, insurerId, amount, paymentId, orderId, paidAt, purchasedBy, idempotencyKey string) (string, error) {
+	if err := requireNonEmpty(map[string]string{
+		"purchaseId": purchaseId, "insurerId": insurerId, "amount": amount, "paymentId": paymentId,
+		"orderId": orderId, "paidAt": paidAt, "purchasedBy": purchasedBy,
+	}); err != nil {
+		return "", err
+	}
+	if err := c.requireClaimChannelForInsurer(ctx, insurerId); err != nil {
+		return "", err
+	}
+	if c.isDedicatedClaimChannel(ctx.GetStub().GetChannelID()) {
+		if err := c.requireInsurerMSPForInsurer(ctx, insurerId); err != nil {
+			return "", err
+		}
+	} else {
+		if err := c.requireOrg(ctx, platformMSP); err != nil {
+			return "", err
+		}
+	}
+	numericAmount, err := assertPositiveInteger(amount, "amount")
+	if err != nil {
+		return "", err
+	}
+	if err := assertIsoDate(paidAt, "paidAt"); err != nil {
+		return "", err
+	}
+	existing, err := c.getFreshIdempotency(ctx, "pointPurchase", insurerId, idempotencyKey, paidAt)
+	if err != nil {
+		return "", err
+	}
+	if existing != nil {
+		return toJson(existing["transaction"])
+	}
+
+	purchaseKey, _ := c.key(ctx, "pointPurchase", purchaseId)
+	if err := c.assertMissing(ctx, purchaseKey, "point purchase"); err != nil {
+		return "", err
+	}
+	paymentKey, _ := c.key(ctx, "pointPurchaseByPayment", paymentId)
+	if err := c.assertMissing(ctx, paymentKey, "payment"); err != nil {
+		return "", err
+	}
+	orderKey, _ := c.key(ctx, "pointPurchaseByOrder", orderId)
+	if err := c.assertMissing(ctx, orderKey, "order"); err != nil {
+		return "", err
+	}
+
+	pointTx, err := c.recordPointTx(ctx, doc{
+		"insurerId": insurerId, "type": "POINT_PURCHASE", "amount": numericAmount, "delta": numericAmount,
+		"purchaseId": purchaseId, "paymentId": paymentId, "orderId": orderId,
+		"idempotencyKey": idempotencyKey, "issuedBy": purchasedBy, "occurredAt": paidAt,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	purchase := doc{
+		"docType": "pointPurchase", "purchaseId": purchaseId, "insurerId": insurerId, "amount": numericAmount,
+		"paymentId": paymentId, "orderId": orderId, "status": "PAID", "paidAt": paidAt,
+		"purchasedBy": purchasedBy, "pointTransactionId": pointTx["transactionId"],
+		"idempotencyKey": nullable(idempotencyKey), "createdTxId": ctx.GetStub().GetTxID(),
+	}
+	if err := c.put(ctx, purchaseKey, purchase); err != nil {
+		return "", err
+	}
+	if err := c.put(ctx, paymentKey, doc{"docType": "pointPurchaseLookup", "purchaseId": purchaseId, "paymentId": paymentId}); err != nil {
+		return "", err
+	}
+	if err := c.put(ctx, orderKey, doc{"docType": "pointPurchaseLookup", "purchaseId": purchaseId, "orderId": orderId}); err != nil {
+		return "", err
+	}
+	result := doc{"purchase": purchase, "pointTx": pointTx}
+	if err := c.saveIdempotency(ctx, "pointPurchase", insurerId, idempotencyKey, paidAt, result); err != nil {
+		return "", err
+	}
+	if err := c.emit(ctx, "PointPurchaseConfirmed", result); err != nil {
+		return "", err
+	}
+	return toJson(result)
+}
+
+func (c *PetChainContract) GetPointPurchase(ctx contractapi.TransactionContextInterface, purchaseId string) (string, error) {
+	if err := requireNonEmpty(map[string]string{"purchaseId": purchaseId}); err != nil {
+		return "", err
+	}
+	purchase, err := c.getRequiredByParts(ctx, "point purchase", "pointPurchase", purchaseId)
+	if err != nil {
+		return "", err
+	}
+	return toJson(purchase)
+}
+
 func (c *PetChainContract) DeductPoints(ctx contractapi.TransactionContextInterface, insurerId, verificationId, amount, deductedAt, idempotencyKey string) (string, error) {
 	if err := requireNonEmpty(map[string]string{"insurerId": insurerId, "verificationId": verificationId, "amount": amount, "deductedAt": deductedAt}); err != nil {
 		return "", err
