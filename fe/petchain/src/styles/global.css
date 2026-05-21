@@ -3,12 +3,12 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* ─ Brand · Forest Green (GolfCC Luxe) ─ */
-  --brand:      #3d5a3a;
-  --brand-h:    #2d4429;
-  --brand-l:    #a8c4a0;
-  --brand-xl:   #eef3ec;
-  --brand-2:    #5a7a52;
+  /* ─ Brand · Soft Mauve Peach ─ */
+  --brand:      #c090c0;
+  --brand-h:    #a070a8;
+  --brand-l:    #d8b8d4;
+  --brand-xl:   #fdf8fd;
+  --brand-2:    #b490b8;
 
   /* ─ Accent · Camel / Gold ─ */
   --orange:     #b8885a;
@@ -36,27 +36,27 @@
   --info-l:     #bae6fd;
   --info-xl:    #f0f9ff;
 
-  /* ─ Neutrals · Warm cream palette ─ */
-  --bg:         #f5f2ec;
-  --bg-2:       #ede9e1;
+  /* ─ Neutrals · Soft Peach White palette ─ */
+  --bg:         #fffbf9;
+  --bg-2:       #f8f0f8;
   --surface:    #ffffff;
-  --surface-2:  #faf8f3;
-  --border:     #ddd5c8;
-  --border-d:   #ccc2b2;
+  --surface-2:  #fdf4f8;
+  --border:     #ead8e8;
+  --border-d:   #d8c4d4;
 
-  --text:       #1c1a17;
-  --text-2:     #3a3530;
-  --text-3:     #554f47;
-  --muted:      #6b6358;
-  --muted-l:    #a09688;
-  --placeholder:#b8b0a4;
+  --text:       #2c1a38;
+  --text-2:     #483058;
+  --text-3:     #6a5078;
+  --muted:      #a08898;
+  --muted-l:    #c0a8bc;
+  --placeholder:#ccc0c8;
 
   /* ─ Shadows ─ */
-  --shadow-xs:  0 1px 2px rgba(28,26,23,.05);
-  --shadow-sm:  0 2px 6px rgba(28,26,23,.07), 0 1px 2px rgba(28,26,23,.04);
-  --shadow-md:  0 4px 16px rgba(28,26,23,.09), 0 2px 4px rgba(28,26,23,.05);
-  --shadow-lg:  0 12px 40px rgba(28,26,23,.12), 0 4px 8px rgba(28,26,23,.06);
-  --shadow-brand: 0 4px 16px rgba(61,90,58,.22);
+  --shadow-xs:  0 1px 2px rgba(44,26,56,.05);
+  --shadow-sm:  0 2px 6px rgba(44,26,56,.07), 0 1px 2px rgba(44,26,56,.04);
+  --shadow-md:  0 4px 16px rgba(44,26,56,.09), 0 2px 4px rgba(44,26,56,.05);
+  --shadow-lg:  0 12px 40px rgba(44,26,56,.12), 0 4px 8px rgba(44,26,56,.06);
+  --shadow-brand: 0 4px 16px rgba(192,144,192,.28);
 
   --font-sans:  'Plus Jakarta Sans', 'Pretendard', system-ui, sans-serif;
   --font-mono:  'JetBrains Mono', monospace;
@@ -100,7 +100,7 @@ body { margin: 0; line-height: 1.6; }
   background: var(--brand); color: #fff;
   border-color: var(--brand); box-shadow: var(--shadow-brand);
 }
-.btn-primary:hover { background: var(--brand-h); border-color: var(--brand-h); box-shadow: 0 6px 20px rgba(61,90,58,.32); }
+.btn-primary:hover { background: var(--brand-h); border-color: var(--brand-h); box-shadow: 0 6px 20px rgba(160,112,168,.32); }
 
 .btn-orange {
   background: var(--orange); color: #fff;
@@ -192,7 +192,7 @@ body { margin: 0; line-height: 1.6; }
 }
 .fi::placeholder { color: var(--placeholder); }
 .fi:hover { border-color: var(--border-d); }
-.fi:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(61,90,58,.15); }
+.fi:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(124,111,160,.18); }
 .fi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .fi-note {
   font-size: 12px; color: var(--muted); padding: 10px 14px;
@@ -336,17 +336,17 @@ body { margin: 0; line-height: 1.6; }
    PLATFORM NAV
 ══════════════════════════════════════ */
 .pnav {
-  background: #1e2a18; height: 58px;
+  background: #221428; height: 58px;
   display: flex; align-items: center; padding: 0 32px; gap: 0;
   box-shadow: 0 2px 12px rgba(0,0,0,.3);
 }
 .pni {
-  height: 58px; padding: 0 18px; font-size: 13.5px; color: #8aaa84;
+  height: 58px; padding: 0 18px; font-size: 13.5px; color: #c4a8bc;
   background: none; border: none; border-bottom: 2.5px solid transparent;
   cursor: pointer; transition: all .15s; font-family: inherit; font-weight: 500;
 }
-.pni:hover { color: #f5f2ec; background: rgba(255,255,255,.05); }
-.pni.on { color: #fff; border-bottom-color: #b8885a; font-weight: 700; }
+.pni:hover { color: #fff0f8; background: rgba(255,255,255,.05); }
+.pni.on { color: #fff; border-bottom-color: #c8a0bc; font-weight: 700; }
 
 /* ══════════════════════════════════════
    AUTH
@@ -354,7 +354,7 @@ body { margin: 0; line-height: 1.6; }
 .auth-wrap { display: flex; min-height: 100vh; }
 .auth-left {
   width: 360px; flex-shrink: 0;
-  background: linear-gradient(160deg, #1e2a18 0%, #243d1e 60%, #0f1a0d 100%);
+  background: linear-gradient(160deg, #221428 0%, #301840 60%, #180c28 100%);
   display: flex; flex-direction: column; padding: 48px 38px;
 }
 .auth-right {
