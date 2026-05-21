@@ -1,5 +1,6 @@
 package com.blockchain.backend.petchainAPI.service;
 
+import com.blockchain.backend.chain.PetChainLedger;
 import com.blockchain.backend.common.HashContract;
 import com.blockchain.backend.common.IdentifierGenerator;
 import com.blockchain.backend.petchainAPI.dto.common.CommonDtos;
@@ -31,6 +32,8 @@ import com.blockchain.backend.petchainDB.repository.PetInsuranceRepository;
 import com.blockchain.backend.petchainDB.repository.PetRepository;
 import com.blockchain.backend.petchainDB.repository.TreatmentCodeRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,7 +53,10 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class RecordService implements RecordApiPort {
+    private static final Logger log = LoggerFactory.getLogger(RecordService.class);
+
     private final ApiDomainSupport support;
+    private final PetChainLedger chainLedger;
     private final MedicalRecordRepository medicalRecordRepository;
     private final MedicalRecordFileRepository medicalRecordFileRepository;
     private final MedicalRecordTreatmentRepository medicalRecordTreatmentRepository;
@@ -123,6 +129,34 @@ public class RecordService implements RecordApiPort {
         // EMR 흐름 연결: 진료기록 저장과 동시에 보호자가 동의 토글할 수 있도록 pending ClaimPackage 를 자동 생성한다.
         // 요청에 insurerId 가 명시되면 그 보험사 한 곳, 아니면 펫이 가입한 모든 보험사로 fan-out.
         autoCreateClaimPackages(saved, guardian, pet);
+
+        // ── 체인코드 연동: 진료기록 해시 등록 ────────────────────────────────
+        // 온체인 실패해도 오프체인 진료기록은 유지하고 로그만 남긴다.
+        if (chainLedger.isEnabled()) {
+            try {
+                String attachJson = fileHashes.stream()
+                        .filter(h -> h.hash() != null && h.hash().startsWith("sha256:"))
+                        .map(h -> "\"" + h.hash() + "\"")
+                        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                if (attachJson.equals("[]") && !fileHashes.isEmpty()) {
+                    attachJson = "[]";
+                }
+                String createdAtIso = (saved.getCreatedAt() != null)
+                        ? saved.getCreatedAt().toInstant(ZoneOffset.UTC).toString()
+                        : Instant.now().toString();
+                String txId = chainLedger.registerRecord(
+                        saved.getRecordId(),
+                        String.valueOf(hospital.getId()),
+                        saved.getDetailDataHash(),
+                        attachJson,
+                        createdAtIso);
+                saved.setFabricTxId(txId.isEmpty() ? null : txId);
+                saved.setOnChainStatus("confirmed");
+            } catch (Exception e) {
+                log.warn("RegisterRecord 온체인 반영 실패 (recordId={}): {}", saved.getRecordId(), e.getMessage());
+                saved.setOnChainStatus("failed");
+            }
+        }
 
         return new RecordDtos.CreateRecordResponse(saved.getRecordId(), saved.getDetailDataHash(), fileHashes);
     }

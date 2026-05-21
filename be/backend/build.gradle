@@ -37,6 +37,8 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	// Hyperledger Fabric Gateway Java SDK (Fabric 2.4+ Gateway 접속)
+	implementation 'org.hyperledger.fabric:fabric-gateway:1.7.1'
 }
 
 tasks.named('test') {

@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +18,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 
 @RestControllerAdvice(basePackages = "com.blockchain.backend.petchainAPI")
 public class ApiExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiErrorResponse> handleApiException(ApiException exception, HttpServletRequest request) {
         ApiErrorResponse response = new ApiErrorResponse(
@@ -138,6 +141,18 @@ public class ApiExceptionHandler {
             }
         }
         return "must be valid";
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
+        log.error("Unhandled exception at {}: {}", request.getRequestURI(), exception.getMessage(), exception);
+        ApiErrorResponse response = new ApiErrorResponse(
+                ApiErrorCode.INTERNAL_ERROR,
+                "서버 오류가 발생했습니다.",
+                TraceIds.from(request),
+                Map.of()
+        );
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
     private static String safeMessage(String message, String fallback) {

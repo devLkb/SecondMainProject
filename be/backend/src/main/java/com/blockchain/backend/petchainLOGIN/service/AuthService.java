@@ -205,6 +205,7 @@ public class AuthService {
                 insuranceCompanyRepository.findByUser_Id(user.getId())
                         .map(InsuranceCompany::getMemberNumber)
                         .orElse(null);
+            case MemberType.PLATFORM -> user.getLoginId();
             default -> null;
         };
     }
