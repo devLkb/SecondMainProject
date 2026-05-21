@@ -327,7 +327,7 @@ class PetChainApiControllerTest {
 
     @Test
     void fileUploadMapsServiceException() throws Exception {
-        when(fileUploadService.saveFileMeta(eq(1L), eq("records/1/file.pdf"), eq("file.pdf"), eq(10L), eq("application/pdf"), eq("other")))
+        when(fileUploadService.saveFileMeta(any(ApiActor.class), eq(1L), eq("records/1/file.pdf"), eq("file.pdf"), eq(10L), eq("application/pdf"), eq("other")))
                 .thenThrow(new IllegalArgumentException("진료기록을 찾을 수 없습니다."));
 
         mockMvc.perform(post("/records/1/files")

@@ -1,5 +1,6 @@
 package com.blockchain.backend.petchainLOGIN.controller;
 
+import com.blockchain.backend.petchainAPI.security.ActorType;
 import com.blockchain.backend.petchainAPI.security.ApiActor;
 import com.blockchain.backend.petchainLOGIN.dto.request.PetRegisterRequest;
 import com.blockchain.backend.petchainLOGIN.dto.response.PetDetailResponse;
@@ -39,10 +40,19 @@ public class PetController {
                 .body(petService.registerPet(requireUserId(actor), req));
     }
 
-    // 병원의 환자 조회: PetChain ID(DB id 또는 펫번호)로 펫 + 진료기록 조회
+    // 병원의 환자 조회: PetChain ID(DB id 또는 펫번호)로 펫 + 진료기록 조회.
+    // 임의 펫 조회는 병원(또는 플랫폼 관리자)만 허용한다. 보호자는 /pets 로 본인 동물만 본다.
     @GetMapping("/{petId}")
-    public ResponseEntity<PetDetailResponse> getPet(@PathVariable String petId) {
+    public ResponseEntity<PetDetailResponse> getPet(ApiActor actor, @PathVariable String petId) {
+        requirePatientLookupScope(actor);
         return ResponseEntity.ok(petService.getPetDetail(petId));
+    }
+
+    private static void requirePatientLookupScope(ApiActor actor) {
+        ActorType type = actor.actorType();
+        if (type != ActorType.HOSPITAL && type != ActorType.ADMIN) {
+            throw new IllegalStateException("환자 조회 권한이 없습니다.");
+        }
     }
 
     private static Long requireUserId(ApiActor actor) {

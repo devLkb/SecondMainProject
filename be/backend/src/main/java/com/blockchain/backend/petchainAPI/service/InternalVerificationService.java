@@ -18,6 +18,8 @@ public class InternalVerificationService implements InternalVerificationApiPort 
 
     @Override
     public VerificationDtos.InternalVerifyResponse verifySubmission(ApiActor actor, String submissionId, VerificationDtos.InternalVerifyRequest request) {
+        // 내부 검증 엔드포인트는 플랫폼 관리자(또는 서비스 계정)만 호출할 수 있다.
+        support.requireAdmin(actor);
         ClaimPackage claim = support.claimBySubmissionId(submissionId);
         String verificationId = "INTERNAL-" + claim.getClaimId();
         boolean activeConsent = "active".equalsIgnoreCase(claim.getConsentStatus());

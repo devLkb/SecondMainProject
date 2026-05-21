@@ -96,11 +96,8 @@ public class DataInitializer implements ApplicationRunner {
         seedHospitals();
     }
 
-    /** 서버 기동 시 데모/개발용 보험사 계정 2개를 보장한다. (운영 프로파일에서는 생성하지 않음) */
+    /** 서버 기동 시 보험사 계정 2개를 보장한다. 모든 프로파일에서 시드하며 loginId 로 멱등성 보장. */
     private void seedInsuranceCompanies() {
-        if (environment.matchesProfiles("prod")) {
-            return;
-        }
         List<InsuranceSeed> seeds = List.of(
                 new InsuranceSeed("삼성화재해상보험", "insurance-samsung", "110-81-10001", "admin@samsungfire.example.com"),
                 new InsuranceSeed("DB손해보험",      "insurance-db",      "110-81-10002", "admin@dbins.example.com")
@@ -146,14 +143,11 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     /**
-     * 서버 기동 시 데모/개발용 병원 계정 4곳을 보장한다. (운영 프로파일에서는 생성하지 않음)
+     * 서버 기동 시 병원 계정 4곳을 보장한다. 모든 프로파일에서 시드하며 loginId 로 멱등성 보장.
      * 채널 구조: 대형 병원 1곳(별도 Fabric Org) + 병원조직 소속 중소 병원 3곳.
      * Hospital 엔티티에는 규모/조직그룹 컬럼이 없어, 구분은 이름과 fabricOrgId 접두어로만 표현한다.
      */
     private void seedHospitals() {
-        if (environment.matchesProfiles("prod")) {
-            return;
-        }
         List<HospitalSeed> seeds = List.of(
                 // 대형 병원 — 별도 조직 (hospital-major-*)
                 new HospitalSeed("한국동물메디컬센터", "hospital-major-kamc",     "220-81-20001", "서울특별시 강남구 테헤란로 100", "02-1000-0001", "admin@kamc.example.com"),
