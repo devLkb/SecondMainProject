@@ -49,14 +49,34 @@ const STYLE = `
   position: relative; padding: 96px 72px; display: flex; flex-direction: column;
   justify-content: flex-end; overflow: hidden;
 }
-.lp-hero-left  { background: #12203a; padding-right: 104px; }
-.lp-hero-right { background: #1a2e1a; padding-left: 104px; }
+.lp-hero-left  { padding-right: 104px; }
+.lp-hero-right { padding-left: 104px; }
 .lp-hero-panel::before {
-  content: ''; position: absolute; inset: 0;
+  content: ''; position: absolute; inset: -5%;
+  background: var(--hero-bg) center/cover no-repeat;
+  filter: brightness(.65);
+  transition: transform .6s ease, filter .6s ease;
+  pointer-events: none;
+}
+.lp-hero-panel:hover::before {
+  transform: scale(1.05);
+  filter: brightness(1.0);
+}
+.lp-hero-panel::after {
+  content: ''; position: absolute; inset: 0; z-index: 1;
+  pointer-events: none;
+}
+.lp-hero-left::after {
   background:
+    linear-gradient(160deg, rgba(18,32,58,.72) 0%, rgba(18,32,58,.42) 100%),
     radial-gradient(circle at 30% 30%, rgba(255,255,255,.06) 0%, transparent 50%),
     linear-gradient(180deg, transparent 0%, rgba(0,0,0,.35) 100%);
-  pointer-events: none;
+}
+.lp-hero-right::after {
+  background:
+    linear-gradient(160deg, rgba(26,46,26,.72) 0%, rgba(26,46,26,.42) 100%),
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,.06) 0%, transparent 50%),
+    linear-gradient(180deg, transparent 0%, rgba(0,0,0,.35) 100%);
 }
 .lp-hero-eyebrow {
   position: relative; z-index: 2;
@@ -442,7 +462,7 @@ export default function Landing({ onGoAuth, role, onGoMain, onLogout, username }
 
       {/* ─ Split Hero ──────────────────────────────────────── */}
       <section className="lp-hero">
-        <div className="lp-hero-panel lp-hero-left" style={{ background: `linear-gradient(160deg, rgba(18,32,58,.80) 0%, rgba(18,32,58,.55) 100%), url(${IMG_LEFT}) center/cover no-repeat` }}>
+        <div className="lp-hero-panel lp-hero-left" style={{ '--hero-bg': `url(${IMG_LEFT})` }}>
           <div className="lp-silhouette-l" />
           <div className="lp-hero-eyebrow">— Community · Region</div>
           <h1 className="lp-hero-title">대한민국 귀여운<br/>지도를 완성하세요</h1>
@@ -458,7 +478,7 @@ export default function Landing({ onGoAuth, role, onGoMain, onLogout, username }
           </button>
         </div>
 
-        <div className="lp-hero-panel lp-hero-right" style={{ background: `linear-gradient(160deg, rgba(26,46,26,.80) 0%, rgba(26,46,26,.55) 100%), url(${IMG_RIGHT}) center/cover no-repeat` }}>
+        <div className="lp-hero-panel lp-hero-right" style={{ '--hero-bg': `url(${IMG_RIGHT})` }}>
           <div className="lp-silhouette" />
           <div className="lp-hero-eyebrow">— Insurance · Blockchain</div>
           <h1 className="lp-hero-title">반려동물 보험 청구,<br/>더 빠르고 안전하게</h1>
