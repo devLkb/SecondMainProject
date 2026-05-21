@@ -93,6 +93,13 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('memberType', data.memberType)
       localStorage.setItem('userId', String(data.userId ?? ''))
       localStorage.setItem('memberNumber', data.memberNumber || '')
+      try {
+        const me = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${data.accessToken}` } })
+        if (me.ok) {
+          const meData = await me.json()
+          localStorage.setItem('memberName', meData.name || '')
+        }
+      } catch (_) {}
       onLogin(ROLE_MAP[data.memberType?.toUpperCase()] || role)
     } catch (e) {
       // 네트워크/서버 오류든 자격증명 오류든 실패를 그대로 표시한다(가짜 로그인 폴백 없음).
@@ -115,6 +122,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       localStorage.setItem('memberType', data.memberType)
       localStorage.setItem('userId', String(data.userId))
       localStorage.setItem('memberNumber', data.memberNumber || '')
+      localStorage.setItem('memberName', gName)
       onLogin('guardian')
     } catch (e) {
       setError(e.message)

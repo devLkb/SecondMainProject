@@ -401,7 +401,7 @@ const GUARDIAN_NAV = [
   { key: 'myinfo',    lbl: '내 정보' },
 ]
 
-export default function Landing({ onGoAuth, role, onGoMain, onLogout }) {
+export default function Landing({ onGoAuth, role, onGoMain, onLogout, username }) {
   const [openFaq, setOpenFaq] = useState(null)
 
   const scrollTo = (id) => {
@@ -414,7 +414,7 @@ export default function Landing({ onGoAuth, role, onGoMain, onLogout }) {
       <style>{STYLE}</style>
 
       {/* ─ Header ──────────────────────────────────────────── */}
-      <header className="lp-hdr">
+      <header className="lp-hdr" >
         <div className="lp-logo" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
           PETCHAIN<span className="dot">.</span>
         </div>
@@ -430,15 +430,19 @@ export default function Landing({ onGoAuth, role, onGoMain, onLogout }) {
           ))}
         </nav>
         <div className="lp-hdr-cta">
-          {role === 'guardian' ? (
-            <button className="lp-btn-ghost" onClick={onLogout}>로그아웃</button>
-          ) : (
-            <>
-              <button className="lp-btn-ghost" onClick={() => onGoAuth('login')}>로그인</button>
-              <button className="lp-btn-solid" onClick={() => onGoAuth('signup')}>가입 신청</button>
-            </>
-          )}
-        </div>
+  {role === 'guardian' ? (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      
+      <span style={{ fontSize: '13px', fontWeight: 500, color: '#3a3530', letterSpacing: '.01em' }}>{username}님, 환영합니다</span>
+      <button className="lp-btn-ghost" onClick={onLogout}>로그아웃</button>
+    </div>
+  ) : (
+    <>
+      <button className="lp-btn-ghost" onClick={() => onGoAuth('login')}>로그인</button>
+      <button className="lp-btn-solid" onClick={() => onGoAuth('signup')}>가입 신청</button>
+    </>
+  )}
+</div>
       </header>
 
       {/* ─ Split Hero ──────────────────────────────────────── */}

@@ -156,6 +156,7 @@ function Inner() {
   const [page, setPage]         = useState(initPage)
   const [authMode, setAuthMode] = useState('login')
   const [role, setRole]         = useState(initRole)
+  const [username, setUsername] = useState(() => localStorage.getItem('memberName') || '')
   const [toast, setToast]       = useState(initToast)
 
   // 초기 히스토리 상태 설정
@@ -181,6 +182,7 @@ function Inner() {
   const showToast = (title, msg) => setToast({ title, msg })
 
   const handleLogin = (selectedRole) => {
+    setUsername(localStorage.getItem('memberName') || '')
     setRole(selectedRole)
     if (selectedRole === 'guardian') {
       const pendingTab = localStorage.getItem('petchain_pending_tab')
@@ -244,7 +246,7 @@ function Inner() {
   if (page === 'landing') {
     return (
       <>
-        <Landing onGoAuth={goAuth} role={role} onGoMain={goMain} onLogout={handleLogout} />
+        <Landing onGoAuth={goAuth} role={role} onGoMain={goMain} onLogout={handleLogout} username={username} />
         {toast && <Toast title={toast.title} msg={toast.msg} onClose={() => setToast(null)} />}
       </>
     )
