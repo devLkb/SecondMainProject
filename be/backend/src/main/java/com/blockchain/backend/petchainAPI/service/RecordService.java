@@ -135,8 +135,8 @@ public class RecordService implements RecordApiPort {
         if (chainLedger.isEnabled()) {
             try {
                 String attachJson = fileHashes.stream()
-                        .filter(h -> h.hash() != null && h.hash().startsWith("sha256:"))
-                        .map(h -> "\"" + h.hash() + "\"")
+                        .filter(h -> h.sha256() != null && h.sha256().startsWith("sha256:"))
+                        .map(h -> "\"" + h.sha256() + "\"")
                         .collect(java.util.stream.Collectors.joining(",", "[", "]"));
                 if (attachJson.equals("[]") && !fileHashes.isEmpty()) {
                     attachJson = "[]";

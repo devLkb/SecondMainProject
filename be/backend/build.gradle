@@ -39,6 +39,8 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	// Hyperledger Fabric Gateway Java SDK (Fabric 2.4+ Gateway 접속)
 	implementation 'org.hyperledger.fabric:fabric-gateway:1.7.1'
+	// Fabric Gateway gRPC TLS 채널 구현체
+	implementation 'io.grpc:grpc-netty-shaded:1.69.0'
 }
 
 tasks.named('test') {
