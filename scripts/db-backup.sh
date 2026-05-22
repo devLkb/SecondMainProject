@@ -12,7 +12,7 @@
 #   ./scripts/db-backup.sh
 #
 # cron 예시 (매일 03:00):
-#   0 3 * * * cd /home/ec2-user/pointpro && ./scripts/db-backup.sh >> backups/backup.log 2>&1
+#   0 3 * * * cd /path/to/pointpro && ./scripts/db-backup.sh >> backups/backup.log 2>&1
 # =====================================================================
 set -euo pipefail
 
