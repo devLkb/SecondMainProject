@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	platformMSP = "PlatformOrgMSP"
+	platformMSP = "Org1MSP" // 로컬 test-network 검증용 매핑(운영 기본값: PlatformOrgMSP). Org1 신원으로 petchannel 쓰기 게이트 통과.
 	hospitalMSP = "HospitalOrgMSP"
 	insurerMSP  = "InsurerOrgMSP" // legacy demo MSP
 	insurerAMSP = "InsuranceAOrgMSP"

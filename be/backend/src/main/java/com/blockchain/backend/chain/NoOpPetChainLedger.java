@@ -35,6 +35,9 @@ public class NoOpPetChainLedger implements PetChainLedger {
                                                  String d, String e, String f, String g) { return ""; }
 
     @Override
+    public String issuePoints(String a, String b, String c, String d) { return ""; }
+
+    @Override
     public String confirmPointPurchase(String a, String b, String c, String d,
                                         String e, String f, String g, String h) { return ""; }
 

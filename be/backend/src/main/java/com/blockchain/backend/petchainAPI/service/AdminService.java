@@ -1,5 +1,6 @@
 package com.blockchain.backend.petchainAPI.service;
 
+import com.blockchain.backend.chain.PetChainLedger;
 import com.blockchain.backend.common.DomainValues;
 import com.blockchain.backend.petchainAPI.dto.admin.AdminDtos;
 import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
@@ -12,6 +13,8 @@ import com.blockchain.backend.petchainDB.entity.PointTransaction;
 import com.blockchain.backend.petchainDB.repository.PointBalanceRepository;
 import com.blockchain.backend.petchainDB.repository.PointTransactionRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +23,12 @@ import java.time.Instant;
 @Service
 @RequiredArgsConstructor
 public class AdminService implements AdminApiPort {
+    private static final Logger log = LoggerFactory.getLogger(AdminService.class);
+
     private final ApiDomainSupport support;
     private final PointBalanceRepository pointBalanceRepository;
     private final PointTransactionRepository pointTransactionRepository;
+    private final PetChainLedger chainLedger;
 
     @Override
     @Transactional
@@ -38,6 +44,21 @@ public class AdminService implements AdminApiPort {
         tx.setAmount(request.amount());
         tx.setDescription(request.reason());
         PointTransaction saved = pointTransactionRepository.save(tx);
+
+        if (chainLedger.isEnabled()) {
+            try {
+                String txId = chainLedger.issuePoints(
+                        insurer.getMemberNumber(),
+                        String.valueOf(request.amount()),
+                        "admin",
+                        Instant.now().toString());
+                saved.setFabricTxId(txId.isEmpty() ? null : txId);
+            } catch (Exception e) {
+                log.warn("IssuePoints 온체인 반영 실패 (insurerId={}, amount={}): {}",
+                        insurer.getMemberNumber(), request.amount(), e.getMessage());
+            }
+        }
+
         return new AdminDtos.IssuePointsResponse(String.valueOf(insurer.getId()), String.valueOf(saved.getId()), request.amount(), balance.getBalance(), String.valueOf(saved.getId()), Instant.now());
     }
 

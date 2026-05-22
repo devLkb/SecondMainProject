@@ -23,6 +23,16 @@ repositories {
 	mavenCentral()
 }
 
+// fabric-gateway 1.7.1 의 fabric-protos 0.3.4 는 protobuf gencode 4.28.2 로 생성됨.
+// fabric-gateway 가 끌어오는 protobuf-java 4.26.1 런타임이 gencode 보다 낮아
+// SerializedIdentity 정적 초기화가 ProtobufRuntimeVersionException 으로 실패한다.
+// 런타임을 gencode 에 맞춰 강제로 올린다(Spring BOM 미관리 의존성이라 force 사용).
+configurations.all {
+	resolutionStrategy {
+		force 'com.google.protobuf:protobuf-java:4.28.2'
+	}
+}
+
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

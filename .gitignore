@@ -124,6 +124,8 @@ wallet/
 *.block
 *.tx
 *.tar.gz
+# 컴파일된 체인코드 바이너리(go build 산출물) — 소스(.go)만 추적한다
+chaincode/petchain/petchain-chaincode
 
 # --- Docker / Compose local state ---
 docker-data/
@@ -132,6 +134,9 @@ volumes/
 docker-compose.override.yml
 compose.override.yml
 override.yml
+
+chaincode/petchain/vendor
+
 
 # --- Local DB watcher (Claude session tools) ---
 db_watch.sh
