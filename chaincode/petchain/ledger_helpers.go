@@ -72,7 +72,10 @@ func (c *PetChainContract) balance(ctx contractapi.TransactionContextInterface, 
 }
 
 func (c *PetChainContract) transactions(ctx contractapi.TransactionContextInterface, docType, ownerId, ownerField string, filter doc) ([]doc, error) {
-	iterator, err := ctx.GetStub().GetStateByRange("", "")
+	// 모든 상태는 CreateCompositeKey(objectType, ...)로 저장된다. 실제 Fabric 피어의
+	// GetStateByRange("","")는 복합키를 반환하지 않아 집계가 항상 0이 된다(MockStub은 반환해 단위테스트는 통과).
+	// objectType 부분 복합키로 조회해야 해당 거래들을 정확히 가져온다.
+	iterator, err := ctx.GetStub().GetStateByPartialCompositeKey(docType, []string{})
 	if err != nil {
 		return nil, err
 	}

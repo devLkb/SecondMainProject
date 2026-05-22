@@ -88,10 +88,20 @@ public class FabricGatewayLedger implements PetChainLedger {
 
     // ── submit/eval 헬퍼 ─────────────────────────────────────────────────────
 
+    /**
+     * 트랜잭션을 제출하고 Fabric TxID(64자 hex)를 반환한다.
+     * contract.submitTransaction()은 체인코드 응답 payload를 반환하므로
+     * newProposal → build → endorse → submit 흐름으로 TxID를 별도 추출한다.
+     * VARCHAR(64) 컬럼에 저장 가능한 길이가 보장된다.
+     */
     private String submit(String fn, String... args) {
         try {
-            byte[] result = contract.submitTransaction(fn, args);
-            return new String(result, StandardCharsets.UTF_8);
+            var transaction = contract.newProposal(fn)
+                    .addArguments(args)
+                    .build();
+            String txId = transaction.getTransactionId();
+            transaction.endorse().submit();
+            return txId;
         } catch (Exception e) {
             throw new RuntimeException("chaincode submit 실패: " + fn + " — " + e.getMessage(), e);
         }
@@ -149,6 +159,11 @@ public class FabricGatewayLedger implements PetChainLedger {
     }
 
     @Override
+    public String issuePoints(String insurerId, String amount, String issuedBy, String issuedAtIso) {
+        return submit("IssuePoints", insurerId, amount, issuedBy, issuedAtIso);
+    }
+
+    @Override
     public String confirmPointPurchase(String pid, String insurerId, String amount, String paymentId,
                                         String orderId, String paidAt, String by, String idem) {
         return submit("ConfirmPointPurchase",
@@ -159,7 +174,13 @@ public class FabricGatewayLedger implements PetChainLedger {
     public long getPointBalance(String insurerId) {
         String raw = eval("GetPointBalance", insurerId);
         try {
-            return Long.parseLong(raw.replaceAll("[^0-9\\-]", ""));
+            // 체인코드는 {"insurerId":"...","balance":N} JSON을 반환한다.
+            // replaceAll("[^0-9\\-]","")는 insurerId 내 숫자까지 추출해 오답을 낸다.
+            // "balance" 키의 값만 정확히 추출한다.
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("\"balance\"\\s*:\\s*(-?\\d+)")
+                    .matcher(raw);
+            return m.find() ? Long.parseLong(m.group(1)) : 0L;
         } catch (Exception e) {
             return 0L;
         }

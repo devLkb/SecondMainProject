@@ -96,6 +96,34 @@ public class PostController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/{postId}")
+    public ApiResponse<PostDtos.PostResponse> updatePost(
+            ApiActor actor,
+            @PathVariable Long postId,
+            @Valid @RequestBody PostDtos.UpdatePostRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.of(postApiPort.updatePost(actor, postId, request), httpRequest);
+    }
+
+    @PutMapping("/{postId}/comments/{commentId}")
+    public ApiResponse<PostDtos.CommentResponse> updateComment(
+            ApiActor actor,
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            @Valid @RequestBody PostDtos.UpdateCommentRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.of(postApiPort.updateComment(actor, postId, commentId, request), httpRequest);
+    }
+
+    @PostMapping("/{postId}/comments/{commentId}/likes")
+    public ApiResponse<PostDtos.CommentLikeResponse> toggleCommentLike(
+            ApiActor actor,
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.of(postApiPort.toggleCommentLike(actor, postId, commentId), httpRequest);
+    }
+
     @PostMapping("/{postId}/images")
     public ResponseEntity<ApiResponse<PostDtos.PostImageResponse>> savePostImage(
             ApiActor actor,

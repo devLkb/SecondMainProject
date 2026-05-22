@@ -47,6 +47,12 @@ public final class PointDtos {
     ) {
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record ChargePointsRequest(
+            @Positive int amount
+    ) {
+    }
+
     public record SpendSaasCreditsResponse(
             @NotBlank String entitlementId,
             @NotBlank String hospitalId,

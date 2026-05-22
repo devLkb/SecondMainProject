@@ -30,6 +30,9 @@ public interface PetChainLedger {
                                          String recordHashAtVerify, String consentSnapshotHash,
                                          String verifiedAtIso, String auditLogId, String idempotencyKey);
 
+    /** 관리자 포인트 발행 (IssuePoints) */
+    String issuePoints(String insurerId, String amount, String issuedBy, String issuedAtIso);
+
     /** 결제 완료 후 보험사 포인트 충전 */
     String confirmPointPurchase(String purchaseId, String insurerId, String amount,
                                 String paymentId, String orderId, String paidAtIso,

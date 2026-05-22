@@ -78,6 +78,15 @@ public class PointController {
         return ApiResponse.of(pointApiPort.getCreditTransactions(actor, search), request);
     }
 
+    @PostMapping("/insurers/{insurerId}/points/charge")
+    public ApiResponse<PointDtos.PointBalanceResponse> chargePoints(
+            ApiActor actor,
+            @PathVariable String insurerId,
+            @Valid @RequestBody PointDtos.ChargePointsRequest chargePointsRequest,
+            HttpServletRequest request) {
+        return ApiResponse.of(pointApiPort.chargePoints(actor, insurerId, chargePointsRequest), request);
+    }
+
     @PostMapping("/hospitals/{hospitalId}/credits/spend/saas")
     public ApiResponse<PointDtos.SpendSaasCreditsResponse> spendSaasCredits(
             ApiActor actor,

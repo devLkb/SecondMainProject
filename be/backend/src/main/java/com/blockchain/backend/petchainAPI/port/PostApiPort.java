@@ -17,4 +17,7 @@ public interface PostApiPort {
     PostDtos.CommentResponse addComment(ApiActor actor, Long postId, PostDtos.CreateCommentRequest request);
     void deleteComment(ApiActor actor, Long postId, Long commentId);
     PostDtos.PostImageResponse savePostImage(ApiActor actor, Long postId, PostDtos.SaveImageRequest request);
+    PostDtos.PostResponse updatePost(ApiActor actor, Long postId, PostDtos.UpdatePostRequest request);
+    PostDtos.CommentResponse updateComment(ApiActor actor, Long postId, Long commentId, PostDtos.UpdateCommentRequest request);
+    PostDtos.CommentLikeResponse toggleCommentLike(ApiActor actor, Long postId, Long commentId);
 }

@@ -223,7 +223,7 @@ func TestDedicatedClaimChannelRejectsPlatformOrg(t *testing.T) {
 	ctx, stub := newCtxWithChannel(platformMSP, claimInsuranceAChannel)
 
 	nextTx(stub, "tx-platform-record")
-	if _, err := contract.RegisterRecord(ctx, "rec_001", "hos_001", hashA, "[]", now); err == nil || !strings.Contains(err.Error(), "MSP PlatformOrgMSP is not allowed") {
+	if _, err := contract.RegisterRecord(ctx, "rec_001", "hos_001", hashA, "[]", now); err == nil || !strings.Contains(err.Error(), "MSP "+platformMSP+" is not allowed") {
 		t.Fatalf("expected platform MSP to be rejected on dedicated claim channel, got: %v", err)
 	}
 }
