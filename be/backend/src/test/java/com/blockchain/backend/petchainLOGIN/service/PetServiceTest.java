@@ -3,6 +3,8 @@ package com.blockchain.backend.petchainLOGIN.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.blockchain.backend.petchainDB.entity.Guardian;
@@ -67,6 +69,52 @@ class PetServiceTest {
         assertThatThrownBy(() -> petService.registerPet(1L, petRequest()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("보호자 정보를 찾을 수 없습니다.");
+    }
+
+    @Test
+    void registerPetStoresRequestedPetNumber() {
+        Guardian guardian = new Guardian();
+        PetRegisterRequest request = petRequest();
+        request.setPetNumber("Z-12345678");
+        when(guardianRepository.findByUser_Id(1L)).thenReturn(Optional.of(guardian));
+        when(petRepository.existsByPetNumber("Z-12345678")).thenReturn(false);
+        when(petRepository.save(any(Pet.class))).thenAnswer(invocation -> {
+            Pet pet = invocation.getArgument(0);
+            pet.setId(5L);
+            pet.setRegisteredAt(LocalDateTime.parse("2026-05-16T10:00:00"));
+            return pet;
+        });
+
+        PetResponse response = petService.registerPet(1L, request);
+
+        assertThat(response.getPetNumber()).isEqualTo("Z-12345678");
+    }
+
+    @Test
+    void registerPetRejectsDuplicateRequestedPetNumber() {
+        Guardian guardian = new Guardian();
+        PetRegisterRequest request = petRequest();
+        request.setPetNumber("Z-12345678");
+        when(guardianRepository.findByUser_Id(1L)).thenReturn(Optional.of(guardian));
+        when(petRepository.existsByPetNumber("Z-12345678")).thenReturn(true);
+
+        assertThatThrownBy(() -> petService.registerPet(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("이미 등록된 동물번호입니다.");
+        verify(petRepository, never()).save(any(Pet.class));
+    }
+
+    @Test
+    void registerPetRejectsInvalidRequestedPetNumberFormat() {
+        Guardian guardian = new Guardian();
+        PetRegisterRequest request = petRequest();
+        request.setPetNumber("Z-123456789");
+        when(guardianRepository.findByUser_Id(1L)).thenReturn(Optional.of(guardian));
+
+        assertThatThrownBy(() -> petService.registerPet(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("동물번호 형식이 올바르지 않습니다.");
+        verify(petRepository, never()).save(any(Pet.class));
     }
 
     private static PetRegisterRequest petRequest() {

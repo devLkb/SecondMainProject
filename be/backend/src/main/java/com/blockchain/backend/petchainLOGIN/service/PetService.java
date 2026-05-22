@@ -12,6 +12,7 @@ import com.blockchain.backend.petchainLOGIN.dto.response.PetDetailResponse;
 import com.blockchain.backend.petchainLOGIN.dto.response.PetResponse;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PetService {
+
+    private static final Pattern PET_NUMBER_PATTERN = Pattern.compile("^[A-Z]-\\d{8}$");
 
     private final PetRepository petRepository;
     private final GuardianRepository guardianRepository;
@@ -40,7 +43,7 @@ public class PetService {
         Guardian guardian = guardianRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new IllegalArgumentException("보호자 정보를 찾을 수 없습니다."));
 
-        String petNumber = uniquePetNumber();
+        String petNumber = resolvePetNumber(req.getPetNumber());
 
         Pet pet = new Pet();
         pet.setGuardian(guardian);
@@ -106,5 +109,19 @@ public class PetService {
             if (!petRepository.existsByPetNumber(num)) return num;
         }
         throw new IllegalStateException("동물번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+
+    private String resolvePetNumber(String requestedPetNumber) {
+        if (requestedPetNumber == null || requestedPetNumber.isBlank()) {
+            return uniquePetNumber();
+        }
+        String petNumber = requestedPetNumber.trim();
+        if (!PET_NUMBER_PATTERN.matcher(petNumber).matches()) {
+            throw new IllegalArgumentException("동물번호 형식이 올바르지 않습니다.");
+        }
+        if (petRepository.existsByPetNumber(petNumber)) {
+            throw new IllegalArgumentException("이미 등록된 동물번호입니다.");
+        }
+        return petNumber;
     }
 }

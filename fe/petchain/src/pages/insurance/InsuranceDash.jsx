@@ -140,13 +140,10 @@ export default function InsuranceDash({ showToast, onLogout }) {
     loadTransactions()
     loadMyFlags()
 
-    // 30초마다 동의 목록 갱신 — 보호자가 동의하면 즉시 반영
-    const consentsTimer = setInterval(loadConsents, 30000)
     // 60초마다 이상신고 현황 갱신 — 관리자 처리 완료 알림
     const flagsTimer    = setInterval(loadMyFlags, 60000)
 
     return () => {
-      clearInterval(consentsTimer)
       clearInterval(flagsTimer)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

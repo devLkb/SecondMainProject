@@ -924,13 +924,14 @@ function InsuranceModal({ pets, onClose, onRegister }) {
 
 /* ── Main ── */
 export default function GuardianDash({ showToast, onLogout, initialTab = null, onHome }) {
-  const { state, update, toggleConsent, addPet } = useApp()
+  const { state, update, toggleConsent } = useApp()
   const [tab, setTab] = useState(() => initialTab || localStorage.getItem('petchain_guardian_tab') || 'home')
 
   useEffect(() => { localStorage.setItem('petchain_guardian_tab', tab) }, [tab])
   const [modal,        setModal]        = useState(null)
   const [detailRecord, setDetailRecord] = useState(null)
   const [newPet,       setNewPet]       = useState({ name:'', species:'dog', breed:'', birthYear:'', chipNo:'', petId:'' })
+  const [petFormError, setPetFormError] = useState('')
   const [consentModal,      setConsentModal]      = useState(null)   // recordId of pending consent
   const [consentInsurerId,  setConsentInsurerId]  = useState(INSURERS[0]?.id || '')
   const [consentCreating,   setConsentCreating]   = useState(false)
@@ -1004,16 +1005,39 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
   }
   const openPetModal = () => {
     const petId = generatePetId(state.pets.map(p=>p.petId))
+    setPetFormError('')
     setNewPet({name:'',species:'dog',breed:'',birthYear:'',chipNo:'',petId}); setModal('pet')
   }
   const handleAddPet = async () => {
     // BE 가 dog|cat|rabbit 영문 코드를 기대하므로 그대로 전송하고, 화면 표시만 한글로 변환한다.
-    addPet({petId:newPet.petId,name:newPet.name,species:newPet.species,breed:newPet.breed,birthYear:newPet.birthYear?Number(newPet.birthYear):'',chipNo:newPet.chipNo,insurer:''})
-    setModal(null); showToast('반려동물 등록',(newPet.name||'새 반려동물')+' 등록 완료')
+    const name = newPet.name.trim()
+    const species = newPet.species.trim()
+    const breed = newPet.breed.trim()
+    const birthYearText = String(newPet.birthYear).trim()
+    if (!name || !species || !breed || !birthYearText) {
+      const message = '이름, 종류, 품종, 출생연도를 모두 입력해 주세요.'
+      setPetFormError(message)
+      showToast('반려동물 등록 실패', message)
+      return
+    }
     try {
-      const created=await apiFetch('/pets',{method:'POST',body:{name:newPet.name,species:newPet.species,breed:newPet.breed,birthYear:newPet.birthYear?Number(newPet.birthYear):undefined,gender:'',isNeutered:false}})
-      if(created?.id){const refreshed=await apiFetch('/pets');const a=Array.isArray(refreshed)?refreshed:[];if(a.length>0)update({pets:a.map(p=>({petId:p.petNumber||String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:''}))})}
-    } catch { /* 서버 미연결 시 로컬 상태만 갱신 */ }
+      const created=await apiFetch('/pets',{method:'POST',body:{petNumber:newPet.petId,name,species,breed,birthYear:Number(birthYearText),gender:'',isNeutered:false}})
+      const createdPet = created?.petNumber || created?.id
+        ? {petId:created.petNumber||String(created.id),name:created.name||name,species:created.species||species,breed:created.breed||breed,birthYear:created.birthYear??Number(birthYearText),chipNo:newPet.chipNo,insurer:''}
+        : null
+      if(createdPet) {
+        update({pets:[...state.pets, createdPet]})
+      } else {
+        const refreshed=await apiFetch('/pets');const a=Array.isArray(refreshed)?refreshed:[];if(a.length>0)update({pets:a.map(p=>({petId:p.petNumber||String(p.id),name:p.name,species:p.species,breed:p.breed,birthYear:p.birthYear,insurer:''}))})
+      }
+      setPetFormError('')
+      setModal(null)
+      showToast('반려동물 등록',`${name} 등록 완료`)
+    } catch (e) {
+      const message = e?.message || '서버 오류로 등록에 실패했습니다.'
+      setPetFormError(message)
+      showToast('반려동물 등록 실패', message)
+    }
   }
 
   return (
@@ -1194,7 +1218,7 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
 
       {/* 반려동물 등록 모달 */}
       {modal==='pet' && (
-        <Overlay title="반려동물 등록" sub="정보 입력 후 반려동물이 등록됩니다" onClose={() => setModal(null)}>
+        <Overlay title="반려동물 등록" sub="정보 입력 후 반려동물이 등록됩니다" onClose={() => { setPetFormError(''); setModal(null) }}>
           <label className="fl">PetChain ID (자동 발급)</label>
           <div style={{ fontFamily:'var(--mono)', fontSize:14, fontWeight:600, color:'var(--brand)', background:'var(--brand-xl)', border:'1px solid var(--brand-l)', borderRadius:8, padding:'10px 14px', marginBottom:14 }}>{newPet.petId}</div>
           <div className="fi-row">
@@ -1208,6 +1232,7 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
           <label className="fl">마이크로칩 번호</label>
           <input className="fi" placeholder="15자리 숫자 — 없으면 공란" value={newPet.chipNo} onChange={e=>setNewPet(p=>({...p,chipNo:e.target.value}))}/>
           <div className="fi-note" style={{ marginBottom:16 }}>📌 마이크로칩 번호는 SHA-256 해시 변환 후 온체인 기록됩니다.</div>
+          {petFormError && <div className="alert alert-danger" style={{ marginBottom:16 }}>{petFormError}</div>}
           <button className="btn btn-primary" style={{ width:'100%', padding:13, fontSize:15, justifyContent:'center' }} onClick={handleAddPet}>등록 완료</button>
         </Overlay>
       )}

@@ -7,6 +7,8 @@ import lombok.Setter;
 @Getter @Setter
 public class PetRegisterRequest {
 
+    private String petNumber;
+
     @NotBlank
     private String name;
 
