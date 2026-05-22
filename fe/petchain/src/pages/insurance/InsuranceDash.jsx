@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import DashNav from '../../components/common/DashNav'
 import { useApp } from '../../context/AppContext'
 import apiFetch from '../../api/client'
@@ -71,12 +71,16 @@ export default function InsuranceDash({ showToast, onLogout }) {
   const [showChargeModal, setShowChargeModal] = useState(false)
   const [chargeAmount, setChargeAmount]       = useState(100)
   const [charging, setCharging]               = useState(false)
+  const [myFlags, setMyFlags]                 = useState([])
 
-  // 포인트 잔액 + 동의 목록 API 로드
+  // 폴링용 ref — useEffect 밖에서 최신 함수를 참조하기 위해 사용
+  const loadConsentsRef = useRef(null)
+  const loadMyFlagsRef  = useRef(null)
+
+  // 포인트 잔액 + 동의 목록 + 이상신고 현황 API 로드
   useEffect(() => {
     async function loadBalance() {
       try {
-        // 'me' = 인증된 보험사 본인 (프론트는 보험사 회사 id를 모름)
         const data = await apiFetch('/insurers/me/points/balance')
         if (data?.balance !== undefined) setState(s => ({ ...s, ptBalance: data.balance }))
       } catch { /* 폴백 */ }
@@ -93,6 +97,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
               recordId:    c.recordId,
               consentId:   c.consentId || c.id,
               petId:       c.petId,
+              guardianId:  c.guardianId || '',
               hospitalId:  c.hospitalId || '',
               recordHash:  c.recordHash || '',
               status:      (c.status || 'pending').toLowerCase(),
@@ -102,7 +107,7 @@ export default function InsuranceDash({ showToast, onLogout }) {
               insurerId:   c.insurerId || '',
               disease:     c.disease || '',
               treatment:   c.treatment || '',
-              cost:        c.cost || 0,
+              cost:        typeof c.cost === 'number' ? c.cost : (Number(c.cost) || 0),
               date:        c.date || '',
             }
           })
@@ -119,9 +124,31 @@ export default function InsuranceDash({ showToast, onLogout }) {
       } catch { /* 폴백 */ }
     }
 
+    async function loadMyFlags() {
+      try {
+        const rows = await apiFetch('/flags')
+        if (Array.isArray(rows)) setMyFlags(rows)
+      } catch { /* 폴백 */ }
+    }
+
+    // ref 에 저장해 버튼 핸들러에서도 호출 가능하게 함
+    loadConsentsRef.current = loadConsents
+    loadMyFlagsRef.current  = loadMyFlags
+
     loadBalance()
     loadConsents()
     loadTransactions()
+    loadMyFlags()
+
+    // 30초마다 동의 목록 갱신 — 보호자가 동의하면 즉시 반영
+    const consentsTimer = setInterval(loadConsents, 30000)
+    // 60초마다 이상신고 현황 갱신 — 관리자 처리 완료 알림
+    const flagsTimer    = setInterval(loadMyFlags, 60000)
+
+    return () => {
+      clearInterval(consentsTimer)
+      clearInterval(flagsTimer)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeConsents  = Object.values(state.consents).filter(c => c.status === 'active')
@@ -320,6 +347,8 @@ export default function InsuranceDash({ showToast, onLogout }) {
     setFlagModal(null)
     setFlagReason('')
     setFlagNote('')
+    // 백엔드에서 내 신고 목록 즉시 동기화
+    loadMyFlagsRef.current?.()
   }
 
   /* ── 심사 결과 배지 ── */
@@ -338,8 +367,31 @@ export default function InsuranceDash({ showToast, onLogout }) {
         {/* ── 검증 목록 ── */}
         {tab === 'list' && (
           <div className="fade-in">
-            <div className="pane-h">검증 대기 목록</div>
-            <div className="pane-sub">보호자 동의가 ACTIVE인 청구 건 — 토글 OFF 시 목록에서 사라집니다</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div>
+                <div className="pane-h" style={{ marginBottom: 0 }}>검증 대기 목록</div>
+                <div className="pane-sub" style={{ marginBottom: 0 }}>보호자 동의가 ACTIVE인 청구 건 — 토글 OFF 시 목록에서 사라집니다</div>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ marginBottom: 4 }}
+                onClick={() => loadConsentsRef.current?.()}
+              >
+                ↻ 새로고침
+              </button>
+            </div>
+
+            {/* 관리자가 처리 완료한 이상신고 알림 */}
+            {myFlags.filter(f => f.status === 'RESOLVED').length > 0 && (
+              <div className="alert alert-success" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, marginTop: 10 }}>
+                <span style={{ fontSize: 18 }}>✅</span>
+                <span style={{ flex: 1 }}>
+                  <strong>이상 신고 처리 완료</strong> — {myFlags.filter(f => f.status === 'RESOLVED').length}건이 처리되었습니다.
+                  <span style={{ fontSize: 12, marginLeft: 6, color: 'var(--muted)' }}>검증 결과 탭에서 상세 내용을 확인하세요.</span>
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={() => setTab('result')}>결과 보기 →</button>
+              </div>
+            )}
 
             {revokedConsents.length > 0 && (
               <div className="alert alert-danger">
@@ -564,6 +616,54 @@ export default function InsuranceDash({ showToast, onLogout }) {
                     </tbody>
                   </table>
                 </div>
+
+                {/* 이상 신고 처리 현황 */}
+                {myFlags.length > 0 && (
+                  <div className="card" style={{ marginTop: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div className="card-title" style={{ margin: 0 }}>내 이상 신고 처리 현황</div>
+                      <button className="btn btn-ghost btn-sm" onClick={() => loadMyFlagsRef.current?.()}>↻ 새로고침</button>
+                    </div>
+                    <table className="tbl">
+                      <thead>
+                        <tr><th>flag_id</th><th>record_id</th><th>신고 사유</th><th>신고일</th><th>처리 상태</th><th>처리 결과</th></tr>
+                      </thead>
+                      <tbody>
+                        {myFlags.map((f, i) => (
+                          <tr key={i} style={f.status === 'RESOLVED' ? { background: 'var(--success-xl)' } : {}}>
+                            <td><span className="mono">{f.flagId}</span></td>
+                            <td><span className="mono">{f.recordId}</span></td>
+                            <td><span className="badge badge-warning">{f.reasonLabel}</span></td>
+                            <td style={{ fontSize: 13, color: 'var(--muted)' }}>
+                              {f.flaggedAt ? new Date(f.flaggedAt).toLocaleDateString() : '—'}
+                            </td>
+                            <td>
+                              {f.status === 'RESOLVED'
+                                ? <span className="badge badge-success">처리 완료</span>
+                                : <span className="badge badge-warning">검토 대기</span>}
+                            </td>
+                            <td>
+                              {f.status === 'RESOLVED' ? (
+                                <div>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--success)' }}>
+                                    {f.resolveCode === 'CONFIRMED_FRAUD'   ? '사기 확인' :
+                                     f.resolveCode === 'FALSE_ALARM'       ? '오탐 — 정상 처리' :
+                                     f.resolveCode === 'NEEDS_MORE_INFO'   ? '추가 자료 요청 중' :
+                                     f.resolveCode === 'ESCALATED'         ? '외부 기관 이관' :
+                                     f.resolveCode || '—'}
+                                  </span>
+                                  {f.resolveNote && (
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{f.resolveNote}</div>
+                                  )}
+                                </div>
+                              ) : <span style={{ color: 'var(--muted)', fontSize: 13 }}>—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </>
             )}
           </div>

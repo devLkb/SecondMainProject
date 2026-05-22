@@ -68,7 +68,9 @@ public class VerificationService implements VerificationApiPort {
             }
         }
 
-        if (!claim.getMedicalRecord().getDetailDataHash().equals(request.recordHash())) {
+        // null-safe hash comparison — detailDataHash 가 null 이면 항상 불일치로 처리
+        String detailHash = claim.getMedicalRecord().getDetailDataHash();
+        if (!java.util.Objects.equals(detailHash, request.recordHash())) {
             PersistedVerification pv = persistVerification(claim, request.requestedBy(), "hash_mismatch", 0);
             submitRecordVerificationOnChain(claim, pv.getLog(), "FAILED", "[\"hash_mismatch\"]");
             return pv.toResponse(false);
@@ -84,8 +86,10 @@ public class VerificationService implements VerificationApiPort {
             throw new ApiException(ApiErrorCode.INSUFFICIENT_POINTS, "Insurer point balance is insufficient");
         }
         insurerBalance.setBalance(insurerBalance.getBalance() - ApiDomainSupport.VERIFY_POINT_COST);
+        pointBalanceRepository.save(insurerBalance);
         PointBalance hospitalBalance = balance(DomainValues.PointOwnerType.HOSPITAL, claim.getMedicalRecord().getHospital().getId());
         hospitalBalance.setBalance(hospitalBalance.getBalance() + ApiDomainSupport.HOSPITAL_VERIFY_CREDIT);
+        pointBalanceRepository.save(hospitalBalance);
 
         PointTransaction spend = transaction("spend", DomainValues.PointOwnerType.INSURANCE, claim.getInsuranceCompany().getId(), DomainValues.PointOwnerType.HOSPITAL, claim.getMedicalRecord().getHospital().getId(), ApiDomainSupport.VERIFY_POINT_COST, "검증 API 호출", claim);
         pointTransactionRepository.save(spend);
