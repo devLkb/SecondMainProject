@@ -2,6 +2,7 @@ package com.blockchain.backend.petchainAPI.service;
 
 import com.blockchain.backend.chain.PetChainLedger;
 import com.blockchain.backend.common.HashContract;
+import com.blockchain.backend.petchainAPI.dto.common.ConsentStatus;
 import com.blockchain.backend.petchainAPI.dto.consent.ConsentDtos;
 import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
 import com.blockchain.backend.petchainAPI.error.ApiException;
@@ -13,6 +14,7 @@ import com.blockchain.backend.petchainDB.entity.InsuranceCompany;
 import com.blockchain.backend.petchainDB.entity.MedicalRecord;
 import com.blockchain.backend.petchainDB.entity.PetInsurance;
 import com.blockchain.backend.petchainDB.repository.ClaimPackageRepository;
+import com.blockchain.backend.petchainDB.repository.MedicalRecordRepository;
 import com.blockchain.backend.petchainDB.repository.PetInsuranceRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -24,8 +26,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +39,7 @@ public class ConsentService implements ConsentApiPort {
 
     private final ApiDomainSupport support;
     private final ClaimPackageRepository claimPackageRepository;
+    private final MedicalRecordRepository medicalRecordRepository;
     private final PetInsuranceRepository petInsuranceRepository;
     private final PetChainLedger chainLedger;
 
@@ -86,17 +92,62 @@ public class ConsentService implements ConsentApiPort {
     @Override
     @Transactional(readOnly = true)
     public ConsentDtos.ConsentListResponse listConsents(ApiActor actor, String recordId, String guardianId, String insurerId, String hospitalId) {
-        // 프론트는 로그인 회원 본인 id를 모르고 userId만 갖고 있어 "me"를 보낸다 → 인증 액터로 치환한다.
-        String gId = "me".equalsIgnoreCase(guardianId) ? String.valueOf(support.guardianByActor(actor).getId()) : guardianId;
-        String iId = "me".equalsIgnoreCase(insurerId) ? String.valueOf(support.insurerByActor(actor).getId()) : insurerId;
-        String hId = "me".equalsIgnoreCase(hospitalId) ? String.valueOf(support.hospitalByActor(actor).getId()) : hospitalId;
+        // "me" 를 역할별 실제 ID로 치환한다. 역할 불일치 시 null 유지.
+        String gId = resolveId(guardianId, () -> String.valueOf(support.guardianByActor(actor).getId()));
+        String iId = resolveId(insurerId,  () -> String.valueOf(support.insurerByActor(actor).getId()));
+        String hId = resolveId(hospitalId, () -> String.valueOf(support.hospitalByActor(actor).getId()));
+
         List<ClaimPackage> claims = claimPackageRepository.findAll().stream()
-                .filter(claim -> recordId == null || Objects.equals(claim.getMedicalRecord().getRecordId(), recordId))
-                .filter(claim -> gId == null || Objects.equals(String.valueOf(claim.getGuardian().getId()), gId) || Objects.equals(claim.getGuardian().getMemberNumber(), gId))
-                .filter(claim -> iId == null || Objects.equals(String.valueOf(claim.getInsuranceCompany().getId()), iId) || Objects.equals(claim.getInsuranceCompany().getMemberNumber(), iId))
-                .filter(claim -> hId == null || Objects.equals(String.valueOf(claim.getMedicalRecord().getHospital().getId()), hId) || Objects.equals(claim.getMedicalRecord().getHospital().getMemberNumber(), hId))
+                .filter(c -> recordId == null || Objects.equals(c.getMedicalRecord().getRecordId(), recordId))
+                .filter(c -> gId == null || Objects.equals(String.valueOf(c.getGuardian().getId()), gId) || Objects.equals(c.getGuardian().getMemberNumber(), gId))
+                .filter(c -> iId == null || Objects.equals(String.valueOf(c.getInsuranceCompany().getId()), iId) || Objects.equals(c.getInsuranceCompany().getMemberNumber(), iId))
+                .filter(c -> hId == null || Objects.equals(String.valueOf(c.getMedicalRecord().getHospital().getId()), hId) || Objects.equals(c.getMedicalRecord().getHospital().getMemberNumber(), hId))
                 .toList();
-        return new ConsentDtos.ConsentListResponse(claims.stream().map(this::toResponse).toList());
+
+        List<ConsentDtos.ConsentResponse> responses = new ArrayList<>(claims.stream().map(this::toResponse).toList());
+
+        // 보호자 조회 시: ClaimPackage 없는 진료기록도 PENDING 상태로 포함해 동의 탭에 표시한다.
+        if (gId != null && iId == null) {
+            Set<String> covered = claims.stream()
+                    .map(c -> c.getMedicalRecord().getRecordId())
+                    .collect(Collectors.toSet());
+            medicalRecordRepository.findAll().stream()
+                    .filter(r -> Objects.equals(String.valueOf(r.getPet().getGuardian().getId()), gId))
+                    .filter(r -> !covered.contains(r.getRecordId()))
+                    .filter(r -> recordId == null || Objects.equals(r.getRecordId(), recordId))
+                    .forEach(r -> responses.add(toPendingResponse(r, gId)));
+        }
+
+        return new ConsentDtos.ConsentListResponse(responses);
+    }
+
+    private String resolveId(String param, java.util.function.Supplier<String> resolver) {
+        if (!"me".equalsIgnoreCase(param)) return param;
+        try { return resolver.get(); } catch (Exception e) { return null; }
+    }
+
+    private ConsentDtos.ConsentResponse toPendingResponse(MedicalRecord record, String guardianId) {
+        List<String> diagnoses = support.diagnosisCodes(record);
+        return new ConsentDtos.ConsentResponse(
+                null,
+                record.getRecordId(),
+                null,
+                guardianId,
+                ConsentStatus.PENDING,
+                null,
+                null,
+                null,
+                null,
+                record.getPet().getName(),
+                record.getHospital().getName(),
+                null,
+                diagnoses.isEmpty() ? null : diagnoses.get(0),
+                java.math.BigDecimal.valueOf(record.getTotalCost()),
+                record.getTreatmentDate(),
+                String.valueOf(record.getPet().getId()),
+                String.valueOf(record.getHospital().getId()),
+                record.getDetailDataHash()
+        );
     }
 
     @Override

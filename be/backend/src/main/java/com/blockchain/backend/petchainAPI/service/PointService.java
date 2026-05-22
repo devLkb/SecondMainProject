@@ -152,6 +152,30 @@ public class PointService implements PointApiPort {
                 });
     }
 
+    @Override
+    @Transactional
+    public PointDtos.PointBalanceResponse chargePoints(ApiActor actor, String insurerId, PointDtos.ChargePointsRequest request) {
+        InsuranceCompany insurer = resolveInsurer(actor, insurerId);
+        support.requireInsurerScope(actor, insurer);
+        PointBalance balance = balance(DomainValues.PointOwnerType.INSURANCE, insurer.getId());
+        balance.setBalance(balance.getBalance() + request.amount());
+        pointBalanceRepository.save(balance);
+
+        PointTransaction tx = new PointTransaction();
+        tx.setTxType("issue");
+        tx.setToOwnerType(DomainValues.PointOwnerType.INSURANCE);
+        tx.setToOwnerId(insurer.getId());
+        tx.setAmount(request.amount());
+        tx.setDescription("포인트 충전");
+        pointTransactionRepository.save(tx);
+
+        return new PointDtos.PointBalanceResponse(
+                String.valueOf(insurer.getId()),
+                balance.getBalance(),
+                Instant.now()
+        );
+    }
+
     private static boolean matchesOwner(PointTransaction tx, String ownerType, Long ownerId) {
         return (Objects.equals(tx.getFromOwnerType(), ownerType) && Objects.equals(tx.getFromOwnerId(), ownerId))
                 || (Objects.equals(tx.getToOwnerType(), ownerType) && Objects.equals(tx.getToOwnerId(), ownerId));

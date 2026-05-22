@@ -9,6 +9,8 @@ import com.blockchain.backend.petchainDB.entity.Post;
 import com.blockchain.backend.petchainDB.entity.PostImage;
 import com.blockchain.backend.petchainDB.entity.PostLike;
 import com.blockchain.backend.petchainDB.entity.User;
+import com.blockchain.backend.petchainDB.entity.CommentLike;
+import com.blockchain.backend.petchainDB.repository.CommentLikeRepository;
 import com.blockchain.backend.petchainDB.repository.CommentRepository;
 import com.blockchain.backend.petchainDB.repository.GuardianRepository;
 import com.blockchain.backend.petchainDB.repository.PostImageRepository;
@@ -43,6 +45,7 @@ public class PostService implements PostApiPort {
     private final PostImageRepository postImageRepository;
     private final PostLikeRepository postLikeRepository;
     private final CommentRepository commentRepository;
+    private final CommentLikeRepository commentLikeRepository;
     private final UserRepository userRepository;
     private final GuardianRepository guardianRepository;
 
@@ -63,7 +66,6 @@ public class PostService implements PostApiPort {
 
         Post saved = postRepository.save(post);
 
-        // 인라인 이미지(base64)가 있으면 post_images에 함께 저장
         List<String> imageKeys = List.of();
         if (request.getImageData() != null && !request.getImageData().isBlank()) {
             PostImage image = new PostImage();
@@ -76,6 +78,7 @@ public class PostService implements PostApiPort {
 
         return PostDtos.PostResponse.builder()
                 .id(saved.getId())
+                .authorId(user.getId())
                 .authorName(resolveAuthorName(user))
                 .authorRegion(saved.getAuthorRegion())
                 .petName(saved.getPetName())
@@ -87,6 +90,86 @@ public class PostService implements PostApiPort {
                 .commentCount(0)
                 .createdAt(saved.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public PostDtos.PostResponse updatePost(ApiActor actor, Long postId, PostDtos.UpdatePostRequest request) {
+        User user = resolveUser(actor);
+        Post post = postRepository.findWithAuthorById(postId)
+                .filter(p -> !p.getIsDeleted())
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 게시물입니다."));
+        if (!post.getAuthor().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("본인 게시물만 수정할 수 있습니다.");
+        }
+        post.setContent(request.getContent().trim());
+        List<PostImage> images = postImageRepository.findByPost_IdOrderByDisplayOrderAsc(postId);
+        long likeCount = postLikeRepository.countByPost_Id(postId);
+        boolean liked = postLikeRepository.existsByPost_IdAndUser_Id(postId, user.getId());
+        long commentCount = commentRepository.countByPost_IdAndIsDeletedFalse(postId);
+        return PostDtos.PostResponse.builder()
+                .id(post.getId())
+                .authorId(user.getId())
+                .authorName(resolveAuthorName(user))
+                .authorRegion(post.getAuthorRegion())
+                .petName(post.getPetName())
+                .petBreed(post.getPetBreed())
+                .content(post.getContent())
+                .imageKeys(images.stream().map(PostService::imageRef).toList())
+                .likeCount(likeCount)
+                .liked(liked)
+                .commentCount(commentCount)
+                .createdAt(post.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public PostDtos.CommentResponse updateComment(ApiActor actor, Long postId, Long commentId, PostDtos.UpdateCommentRequest request) {
+        User user = resolveUser(actor);
+        findActivePost(postId);
+        Comment comment = commentRepository.findById(commentId)
+                .filter(c -> !c.getIsDeleted() && c.getPost().getId().equals(postId))
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 댓글입니다."));
+        if (!comment.getAuthor().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("본인 댓글만 수정할 수 있습니다.");
+        }
+        comment.setContent(request.getContent().trim());
+        long likeCount = commentLikeRepository.countByComment_Id(commentId);
+        boolean liked = commentLikeRepository.existsByComment_IdAndUser_Id(commentId, user.getId());
+        List<PostDtos.CommentResponse> replies = List.of();
+        if (comment.getParentComment() == null) {
+            List<Comment> replyComments = commentRepository.findRepliesWithAuthor(commentId);
+            Long uid = user.getId();
+            replies = replyComments.stream()
+                    .map(r -> toCommentResponse(r, resolveAuthorName(r.getAuthor()),
+                            commentLikeRepository.countByComment_Id(r.getId()),
+                            commentLikeRepository.existsByComment_IdAndUser_Id(r.getId(), uid),
+                            List.of()))
+                    .toList();
+        }
+        return toCommentResponse(comment, resolveAuthorName(user), likeCount, liked, replies);
+    }
+
+    @Override
+    @Transactional
+    public PostDtos.CommentLikeResponse toggleCommentLike(ApiActor actor, Long postId, Long commentId) {
+        User user = resolveUser(actor);
+        findActivePost(postId);
+        Comment comment = commentRepository.findById(commentId)
+                .filter(c -> !c.getIsDeleted() && c.getPost().getId().equals(postId))
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 댓글입니다."));
+        Optional<CommentLike> existing = commentLikeRepository.findByComment_IdAndUser_Id(commentId, user.getId());
+        if (existing.isPresent()) {
+            commentLikeRepository.delete(existing.get());
+        } else {
+            CommentLike like = new CommentLike();
+            like.setComment(comment);
+            like.setUser(user);
+            commentLikeRepository.save(like);
+        }
+        long count = commentLikeRepository.countByComment_Id(commentId);
+        return new PostDtos.CommentLikeResponse(commentId, existing.isEmpty(), count);
     }
 
     @Override
@@ -157,10 +240,11 @@ public class PostService implements PostApiPort {
         List<PostImage> images = postImageRepository.findByPost_IdOrderByDisplayOrderAsc(postId);
         long likeCount = postLikeRepository.countByPost_Id(postId);
         boolean liked = userId != null && postLikeRepository.existsByPost_IdAndUser_Id(postId, userId);
-        List<PostDtos.CommentResponse> comments = buildCommentTree(postId);
+        List<PostDtos.CommentResponse> comments = buildCommentTree(postId, userId);
 
         return PostDtos.PostDetailResponse.builder()
                 .id(post.getId())
+                .authorId(post.getAuthor().getId())
                 .authorName(resolveAuthorName(post.getAuthor()))
                 .authorRegion(post.getAuthorRegion())
                 .petName(post.getPetName())
@@ -235,7 +319,7 @@ public class PostService implements PostApiPort {
         }
 
         Comment saved = commentRepository.save(comment);
-        return toCommentResponse(saved, resolveAuthorName(user), List.of());
+        return toCommentResponse(saved, resolveAuthorName(user), 0L, false, List.of());
     }
 
     @Override
@@ -322,24 +406,31 @@ public class PostService implements PostApiPort {
                 .orElse(user.getLoginId());
     }
 
-    private List<PostDtos.CommentResponse> buildCommentTree(Long postId) {
-        // author가 JOIN FETCH된 쿼리로 N+1 방지
+    private List<PostDtos.CommentResponse> buildCommentTree(Long postId, Long userId) {
         List<Comment> roots = commentRepository.findRootCommentsWithAuthor(postId);
-
         return roots.stream().map(root -> {
             List<Comment> replies = commentRepository.findRepliesWithAuthor(root.getId());
             List<PostDtos.CommentResponse> replyResponses = replies.stream()
-                    .map(r -> toCommentResponse(r, resolveAuthorName(r.getAuthor()), List.of()))
+                    .map(r -> toCommentResponse(r, resolveAuthorName(r.getAuthor()),
+                            commentLikeRepository.countByComment_Id(r.getId()),
+                            userId != null && commentLikeRepository.existsByComment_IdAndUser_Id(r.getId(), userId),
+                            List.of()))
                     .toList();
-            return toCommentResponse(root, resolveAuthorName(root.getAuthor()), replyResponses);
+            return toCommentResponse(root, resolveAuthorName(root.getAuthor()),
+                    commentLikeRepository.countByComment_Id(root.getId()),
+                    userId != null && commentLikeRepository.existsByComment_IdAndUser_Id(root.getId(), userId),
+                    replyResponses);
         }).toList();
     }
 
-    private PostDtos.CommentResponse toCommentResponse(Comment c, String authorName, List<PostDtos.CommentResponse> replies) {
+    private PostDtos.CommentResponse toCommentResponse(Comment c, String authorName, long likeCount, boolean liked, List<PostDtos.CommentResponse> replies) {
         return PostDtos.CommentResponse.builder()
                 .id(c.getId())
+                .authorId(c.getAuthor().getId())
                 .authorName(authorName)
                 .content(c.getContent())
+                .likeCount(likeCount)
+                .liked(liked)
                 .replies(replies)
                 .createdAt(c.getCreatedAt())
                 .build();
@@ -350,7 +441,6 @@ public class PostService implements PostApiPort {
         return toSummary(post, likeCount, userId);
     }
 
-    // 좋아요 수를 이미 알고 있을 때(인기글 집계 쿼리 결과 등) 중복 COUNT를 피하는 변형
     private PostDtos.PostSummaryResponse toSummary(Post post, long likeCount, Long userId) {
         boolean liked = userId != null && postLikeRepository.existsByPost_IdAndUser_Id(post.getId(), userId);
         long commentCount = commentRepository.countByPost_IdAndIsDeletedFalse(post.getId());
@@ -358,6 +448,7 @@ public class PostService implements PostApiPort {
 
         return PostDtos.PostSummaryResponse.builder()
                 .id(post.getId())
+                .authorId(post.getAuthor().getId())
                 .authorName(resolveAuthorName(post.getAuthor()))
                 .authorRegion(post.getAuthorRegion())
                 .petName(post.getPetName())

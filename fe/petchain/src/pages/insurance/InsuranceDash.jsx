@@ -38,7 +38,7 @@ const CHANNEL_INFO = [
       { label: '중소동물병원 B', role: '병원',    dot: '#fb923c' },
       { label: '중소동물병원 C', role: '병원',    dot: '#fb923c' },
       { label: 'DB손해보험',     role: '보험사',  dot: '#34d399' },
-      { label: '현대해상',       role: '보험사',  dot: '#34d399' },
+      { label: '삼성화재해상보험', role: '보험사', dot: '#34d399' },
     ],
   },
   {
@@ -48,9 +48,9 @@ const CHANNEL_INFO = [
     badgeColor: '#ea580c',
     desc: '독립 조직을 선택한 대형 동물병원 전용 채널. 보험사 2곳이 함께 참여합니다.',
     members: [
-      { label: '대형동물병원',   role: '병원(독립)', dot: '#fb923c' },
-      { label: 'DB손해보험',     role: '보험사',     dot: '#34d399' },
-      { label: '현대해상',       role: '보험사',     dot: '#34d399' },
+      { label: '대형동물병원',     role: '병원(독립)', dot: '#fb923c' },
+      { label: 'DB손해보험',       role: '보험사',     dot: '#34d399' },
+      { label: '삼성화재해상보험', role: '보험사',     dot: '#34d399' },
     ],
   },
 ]
@@ -68,6 +68,9 @@ export default function InsuranceDash({ showToast, onLogout }) {
   const [flagModal, setFlagModal]   = useState(null)
   const [flagReason, setFlagReason] = useState('')
   const [flagNote, setFlagNote]     = useState('')
+  const [showChargeModal, setShowChargeModal] = useState(false)
+  const [chargeAmount, setChargeAmount]       = useState(100)
+  const [charging, setCharging]               = useState(false)
 
   // 포인트 잔액 + 동의 목록 API 로드
   useEffect(() => {
@@ -215,6 +218,23 @@ export default function InsuranceDash({ showToast, onLogout }) {
       } catch { /* 무시 */ }
     } finally {
       verifyingRef.current.delete(c.recordId)
+    }
+  }
+
+  /* ── 포인트 충전 ── */
+  const handleCharge = async () => {
+    const amt = Number(chargeAmount)
+    if (!amt || amt <= 0 || charging) return
+    setCharging(true)
+    try {
+      const data = await apiFetch('/insurers/me/points/charge', { method:'POST', body:{ amount:amt } })
+      if (data?.balance !== undefined) setState(s => ({ ...s, ptBalance: data.balance }))
+      showToast('충전 완료', `${amt}포인트 충전 완료 · 잔액: ${data.balance ?? ''}`)
+      setShowChargeModal(false)
+    } catch (e) {
+      showToast('충전 실패', e?.message || '충전에 실패했습니다')
+    } finally {
+      setCharging(false)
     }
   }
 
@@ -572,14 +592,14 @@ export default function InsuranceDash({ showToast, onLogout }) {
             {state.ptBalance < 100 && (
               <div className="alert alert-warning">
                 ⚠️ 포인트 잔액이 부족합니다.
-                <button className="btn btn-orange btn-sm" style={{ marginLeft: 'auto' }}>충전 요청</button>
+                <button className="btn btn-orange btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setShowChargeModal(true)}>충전 요청</button>
               </div>
             )}
 
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <div className="card-title" style={{ margin: 0 }}>포인트 거래 이력</div>
-                <button className="btn btn-primary btn-sm">충전 요청</button>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowChargeModal(true)}>충전 요청</button>
               </div>
               <table className="tbl">
                 <thead>
@@ -672,6 +692,31 @@ export default function InsuranceDash({ showToast, onLogout }) {
           </div>
         )}
       </div>
+
+      {/* ── 포인트 충전 모달 ── */}
+      {showChargeModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:900, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'#fff', borderRadius:18, padding:32, width:'100%', maxWidth:400, position:'relative' }}>
+            <button onClick={() => setShowChargeModal(false)} style={{ position:'absolute', top:16, right:18, background:'none', border:'none', fontSize:22, color:'#a1a1aa', cursor:'pointer' }}>✕</button>
+            <div style={{ fontSize:19, fontWeight:800, marginBottom:4 }}>포인트 충전</div>
+            <div style={{ fontSize:13, color:'var(--muted)', marginBottom:20 }}>충전할 포인트 수량을 입력하세요</div>
+            <label className="fl">충전 포인트</label>
+            <input className="fi" type="number" min="1" value={chargeAmount} onChange={e => setChargeAmount(e.target.value)} style={{ marginBottom:10 }} />
+            <div style={{ display:'flex', gap:8, marginBottom:20 }}>
+              {[100, 500, 1000, 3000].map(n => (
+                <button key={n} className="btn btn-ghost btn-sm" onClick={() => setChargeAmount(n)} style={{ flex:1, justifyContent:'center' }}>{n}P</button>
+              ))}
+            </div>
+            <div style={{ background:'var(--bg-2)', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:13, display:'flex', justifyContent:'space-between' }}>
+              <span style={{ color:'var(--muted)' }}>현재 잔액</span>
+              <span style={{ fontWeight:700, color:'var(--brand)' }}>{state.ptBalance}P</span>
+            </div>
+            <button className="btn btn-primary" style={{ width:'100%', padding:13, fontSize:14, fontWeight:700, justifyContent:'center' }} onClick={handleCharge} disabled={!chargeAmount || charging}>
+              {charging ? '충전 중...' : `${chargeAmount}포인트 충전`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── 이상 신고 모달 ── */}
       {flagModal && (

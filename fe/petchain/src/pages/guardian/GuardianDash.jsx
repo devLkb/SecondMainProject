@@ -56,10 +56,8 @@ const REGIONS = [
   '전라북도','전라남도','경상북도','경상남도','제주특별자치도',
 ]
 const INSURERS = [
-  { id:'ins-001', name:'DB손해보험', logo:'🛡️' },
-  { id:'ins-002', name:'현대해상',   logo:'🛡️' },
-  { id:'ins-003', name:'KB손해보험', logo:'🛡️' },
-  { id:'ins-004', name:'메리츠화재', logo:'🛡️' },
+  { id:'insurance-samsung', name:'삼성화재해상보험', logo:'🛡️' },
+  { id:'insurance-db',      name:'DB손해보험',      logo:'🛡️' },
 ]
 const PAGE_SIZE = 7
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
@@ -97,42 +95,51 @@ const SPECIES_LABEL = { dog:'강아지', cat:'고양이', rabbit:'토끼', '강�
 const speciesIcon = s => (s==='dog'||s==='강아지') ? '🐶' : (s==='cat'||s==='고양이') ? '🐱' : (s==='rabbit'||s==='토끼') ? '🐰' : '🐾'
 
 /* ── ConsentCard ── */
-function ConsentCard({ c, onToggle }) {
-  const isActive  = c.status === 'active'
-  const isPending = c.status === 'pending'
+function ConsentCard({ c, onToggle, onStartConsent }) {
+  const isActive    = c.status === 'active'
+  const isPending   = c.status === 'pending'
+  const needsConsent = isPending && !c.insurerId  // 진료기록은 있지만 아직 동의 미생성
   return (
     <div className="card" style={{
       borderLeft: `3px solid ${isActive ? 'var(--success)' : isPending ? 'var(--warning)' : 'var(--border-d)'}`,
-      opacity: isPending ? .75 : 1,
+      opacity: needsConsent ? .9 : 1,
       background: isActive ? 'var(--success-xl)' : c.status === 'revoked' ? '#fafaf9' : 'var(--surface)',
     }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div style={{ flex:1 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
-            <span style={{ fontSize:16, fontWeight:600 }}>{c.pet}</span>
+            <span style={{ fontSize:16, fontWeight:600 }}>{c.pet || '반려동물'}</span>
             <span style={{ color:'var(--muted)' }}>·</span>
-            <span style={{ fontSize:15, color:'var(--text-2)' }}>{c.disease}</span>
+            <span style={{ fontSize:15, color:'var(--text-2)' }}>{c.disease || '—'}</span>
           </div>
           <div style={{ fontSize:13, color:'var(--muted)', display:'flex', gap:12, flexWrap:'wrap' }}>
-            <span>🏥 {c.hospital}</span>
+            <span>🏥 {c.hospital || '—'}</span>
             <span className="mono">{c.recordId}</span>
-            <span>💰 {c.cost.toLocaleString()}원</span>
-            <span>🛡️ {c.insurerName}</span>
+            <span>💰 {(c.cost||0).toLocaleString()}원</span>
+            {c.insurerName && <span>🛡️ {c.insurerName}</span>}
           </div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginLeft:20, flexShrink:0 }}>
-          <span style={{ fontSize:13, fontWeight:500, color:isActive?'var(--success)':isPending?'var(--warning)':'var(--muted)' }}>
-            {isActive?'동의 중':isPending?'대기 중':'동의 안 함'}
-          </span>
-          <label className="toggle">
-            <input type="checkbox" checked={isActive} disabled={isPending} onChange={() => onToggle(c.recordId)} />
-            <span className="toggle-slider" />
-          </label>
+          {needsConsent ? (
+            <button className="btn btn-primary btn-sm" onClick={() => onStartConsent && onStartConsent(c.recordId)}>
+              보험사 선택 후 동의 →
+            </button>
+          ) : (
+            <>
+              <span style={{ fontSize:13, fontWeight:500, color:isActive?'var(--success)':isPending?'var(--warning)':'var(--muted)' }}>
+                {isActive?'동의 중':isPending?'대기 중':'동의 안 함'}
+              </span>
+              <label className="toggle">
+                <input type="checkbox" checked={isActive} disabled={isPending} onChange={() => onToggle(c.recordId)} />
+                <span className="toggle-slider" />
+              </label>
+            </>
+          )}
         </div>
       </div>
       {isActive  && <div className="consent-active-banner"  style={{ marginTop:10 }}>✅ <strong>{c.insurerName}</strong>에 서류 자동 전달 중 · 보험사 검증 가능 상태</div>}
       {c.status==='revoked' && <div className="consent-revoked-banner" style={{ marginTop:10 }}>⛔ 동의 철회됨 — <strong>{c.insurerName}</strong> 신규 접근 차단 · 토글 ON으로 재동의 가능</div>}
-      {isPending && <div className="alert alert-warning" style={{ marginTop:10 }}>⏳ 병원이 진료기록을 아직 등록하지 않았습니다. 등록 후 동의 가능합니다.</div>}
+      {needsConsent && <div className="alert alert-info" style={{ marginTop:10 }}>📋 진료기록이 등록되었습니다. 보험사를 선택해 동의를 시작하세요.</div>}
     </div>
   )
 }
@@ -375,18 +382,19 @@ function compressImage(file, maxSize = 1024, quality = 0.7) {
 function mapServerPost(p) {
   return {
     id: p.id,
+    authorId: p.authorId || null,
     authorName: p.authorName || '익명',
     authorRegion: p.authorRegion || '',
     petName: p.petName || '',
     petBreed: p.petBreed || '',
     content: p.content || '',
     imageUrl: (Array.isArray(p.imageKeys) && p.imageKeys[0]) || null,
-    likes: [],                       // 목업 호환용(서버 게시물은 likeCount 사용)
+    likes: [],
     likeCount: p.likeCount || 0,
     liked: !!p.liked,
     comments: [],
     commentCount: p.commentCount || 0,
-    commentsLoaded: false,           // 댓글 펼칠 때 상세 조회로 채움
+    commentsLoaded: false,
     createdAt: (p.createdAt || '').slice(0, 10).replaceAll('-', '.'),
     votes: {}, myVoted: false,
   }
@@ -395,12 +403,14 @@ function mapServerPost(p) {
 function mapServerComment(c) {
   return {
     id: c.id,
+    authorId: c.authorId || null,
     authorName: c.authorName || '익명',
     authorRegion: '',
     content: c.content || '',
-    likes: 0,
+    likeCount: c.likeCount || 0,
+    liked: !!c.liked,
     replies: Array.isArray(c.replies)
-      ? c.replies.map(r => ({ id: r.id, authorName: r.authorName || '익명', content: r.content || '', likes: 0 }))
+      ? c.replies.map(r => ({ id: r.id, authorId: r.authorId || null, authorName: r.authorName || '익명', content: r.content || '', likeCount: r.likeCount || 0, liked: !!r.liked }))
       : [],
   }
 }
@@ -417,11 +427,16 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
   const [showCompose,      setShowCompose]      = useState(false)
   const [newPost,          setNewPost]          = useState({ content:'', petId:'', imagePreview:null })
   const [submitting,       setSubmitting]       = useState(false)
+  const [editingPost,      setEditingPost]      = useState(null)   // {id, content}
+  const [editingComment,   setEditingComment]   = useState(null)   // {postId, cmtId, content}
+  const [editingReply,     setEditingReply]     = useState(null)   // {postId, cmtId, repId, content}
+  const [replyLikes,       setReplyLikes]       = useState({})     // {repId: {count, liked}}
   const fileRef = useRef()
   const userRegion    = state.userRegion
   const likedPosts    = state.likedPosts || []
   const filteredPosts = filter==='all' ? state.posts : state.posts.filter(p=>p.authorRegion===userRegion)
   const isLiked = id => likedPosts.includes(id)
+  const currentUserId = Number(localStorage.getItem('userId'))
 
   // 커뮤니티 탭 진입 시 서버 게시물 로드 (실패/빈 목록이면 목업 유지)
   useEffect(() => {
@@ -491,6 +506,73 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
     update({ posts:state.posts.map(p=>p.id===postId?{...p,comments:p.comments.map(c=>c.id===cmtId?{...c,replies:[...c.replies,{id:`rep-${Date.now()}`,authorName:'홍길동',content,likes:0}]}:c)}:p) })
     setReplyInputs(prev=>({...prev,[cmtId]:''})); setReplyOpen(prev=>({...prev,[cmtId]:false}))
   }
+  const handleSavePost = async (postId) => {
+    if (!editingPost?.content?.trim()) return
+    if (isServerId(postId)) {
+      try { await apiFetch(`/posts/${postId}`, { method:'PUT', body:{ content:editingPost.content.trim() } }) } catch(e) { showToast('수정 실패', e?.message||'수정에 실패했습니다'); return }
+    }
+    update({ posts: state.posts.map(p => p.id===postId ? {...p, content:editingPost.content.trim()} : p) })
+    setEditingPost(null)
+    showToast('수정 완료', '게시물이 수정되었습니다')
+  }
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm('게시물을 삭제하시겠습니까?')) return
+    if (isServerId(postId)) {
+      try { await apiFetch(`/posts/${postId}`, { method:'DELETE' }) } catch(e) { showToast('삭제 실패', e?.message||'삭제에 실패했습니다'); return }
+    }
+    update({ posts: state.posts.filter(p => p.id !== postId) })
+    showToast('삭제 완료', '게시물이 삭제되었습니다')
+  }
+  const handleSaveComment = async (postId, cmtId) => {
+    if (!editingComment?.content?.trim()) return
+    if (isServerId(postId) && isServerId(cmtId)) {
+      try { await apiFetch(`/posts/${postId}/comments/${cmtId}`, { method:'PUT', body:{ content:editingComment.content.trim() } }) } catch(e) { showToast('수정 실패', e?.message||'댓글 수정에 실패했습니다'); return }
+    }
+    update({ posts: state.posts.map(p => p.id===postId ? {...p, comments:p.comments.map(c => c.id===cmtId ? {...c,content:editingComment.content.trim()} : c)} : p) })
+    setEditingComment(null)
+  }
+  const handleDeleteComment = async (postId, cmtId) => {
+    if (isServerId(postId) && isServerId(cmtId)) {
+      try { await apiFetch(`/posts/${postId}/comments/${cmtId}`, { method:'DELETE' }) } catch(e) { showToast('삭제 실패', e?.message||'댓글 삭제에 실패했습니다'); return }
+    }
+    update({ posts: state.posts.map(p => p.id===postId ? {...p, comments:p.comments.filter(c=>c.id!==cmtId), commentCount:Math.max(0,(p.commentCount??p.comments.length)-1)} : p) })
+  }
+  const handleToggleCommentLike = async (postId, cmtId) => {
+    if (isServerId(postId) && isServerId(cmtId)) {
+      try {
+        const res = await apiFetch(`/posts/${postId}/comments/${cmtId}/likes`, { method:'POST' })
+        update({ posts: state.posts.map(p => p.id===postId ? {...p, comments:p.comments.map(c => c.id===cmtId ? {...c, liked:res.liked, likeCount:res.likeCount} : c)} : p) })
+      } catch { /* 로컬 상태만 갱신 */ }
+    } else {
+      update({ posts: state.posts.map(p => p.id===postId ? {...p, comments:p.comments.map(c => c.id===cmtId ? {...c, liked:!c.liked, likeCount:(c.likeCount||0)+(c.liked?-1:1)} : c)} : p) })
+    }
+  }
+  const handleSaveReply = async (postId, cmtId, repId) => {
+    if (!editingReply?.content?.trim()) return
+    if (isServerId(repId)) {
+      try { await apiFetch(`/posts/${postId}/comments/${repId}`, { method:'PUT', body:{ content:editingReply.content.trim() } }) } catch(e) { showToast('수정 실패', e?.message||'대댓글 수정에 실패했습니다'); return }
+    }
+    update({ posts: state.posts.map(p => p.id===postId ? {...p, comments:p.comments.map(c => c.id===cmtId ? {...c, replies:c.replies.map(r => r.id===repId ? {...r,content:editingReply.content.trim()} : r)} : c)} : p) })
+    setEditingReply(null)
+  }
+  const handleDeleteReply = async (postId, cmtId, repId) => {
+    if (isServerId(repId)) {
+      try { await apiFetch(`/posts/${postId}/comments/${repId}`, { method:'DELETE' }) } catch(e) { showToast('삭제 실패', e?.message||'대댓글 삭제에 실패했습니다'); return }
+    }
+    update({ posts: state.posts.map(p => p.id===postId ? {...p, comments:p.comments.map(c => c.id===cmtId ? {...c, replies:c.replies.filter(r=>r.id!==repId)} : c)} : p) })
+  }
+  const handleToggleReplyLike = async (postId, cmtId, repId) => {
+    const cur = replyLikes[repId] ?? { count: 0, liked: false }
+    if (isServerId(repId)) {
+      try {
+        const res = await apiFetch(`/posts/${postId}/comments/${repId}/likes`, { method:'POST' })
+        setReplyLikes(prev => ({...prev, [repId]: {count:res.likeCount, liked:res.liked}}))
+        return
+      } catch { /* 낙관적 업데이트로 폴백 */ }
+    }
+    setReplyLikes(prev => ({...prev, [repId]: {count:cur.liked?cur.count-1:cur.count+1, liked:!cur.liked}}))
+  }
+
   const handleSubmitPost = async () => {
     if (!newPost.content.trim() || submitting) return
     const pet=state.pets.find(p=>p.petId===newPost.petId)||state.pets[0]
@@ -528,6 +610,8 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
         {filteredPosts.length===0 && <div className="card" style={{ textAlign:'center', padding:'48px 24px', color:'var(--muted)' }}><div style={{ fontSize:32, marginBottom:10 }}>🐾</div><div style={{ fontWeight:500, fontSize:16 }}>게시물이 없습니다</div></div>}
         {filteredPosts.map(post => {
           const liked=post.liked ?? isLiked(post.id); const cmtExpanded=expandedComments[post.id]
+          const isMyPost = post.authorId && post.authorId === currentUserId
+          const isEditingThisPost = editingPost?.id === post.id
           return (
             <div key={post.id} className="card" style={{ padding:'20px 22px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
@@ -539,9 +623,22 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
                   </div>
                   <div style={{ fontSize:13, color:'var(--muted)', marginTop:1 }}>{post.createdAt}</div>
                 </div>
+                {isMyPost && (
+                  <div style={{ display:'flex', gap:4 }}>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize:12, color:'var(--muted)' }} onClick={() => isEditingThisPost ? setEditingPost(null) : setEditingPost({id:post.id, content:post.content})}>{isEditingThisPost ? '취소' : '✏️ 수정'}</button>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize:12, color:'var(--danger)' }} onClick={() => handleDeletePost(post.id)}>🗑️ 삭제</button>
+                  </div>
+                )}
               </div>
               {post.petName && <div style={{ display:'flex', gap:6, marginBottom:10 }}><span className="badge badge-orange">🐶 {post.petName}</span><span className="badge badge-muted">{post.petBreed}</span></div>}
-              <div style={{ fontSize:15, color:'var(--text-2)', lineHeight:1.75, marginBottom:12 }}>{post.content}</div>
+              {isEditingThisPost ? (
+                <div style={{ marginBottom:12 }}>
+                  <textarea className="fi" rows={4} style={{ resize:'vertical', fontFamily:'inherit', marginBottom:8 }} value={editingPost.content} onChange={e=>setEditingPost(p=>({...p,content:e.target.value}))} />
+                  <button className="btn btn-primary btn-sm" onClick={() => handleSavePost(post.id)}>저장</button>
+                </div>
+              ) : (
+                <div style={{ fontSize:15, color:'var(--text-2)', lineHeight:1.75, marginBottom:12 }}>{post.content}</div>
+              )}
               {post.imageUrl && <div style={{ marginBottom:12, borderRadius:10, overflow:'hidden', aspectRatio:'16/9' }}><img src={post.imageUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /></div>}
               <div style={{ display:'flex', gap:4, paddingTop:10, borderTop:'1px solid var(--border)' }}>
                 <button className="btn btn-ghost btn-sm" onClick={() => handleLike(post.id)} style={{ color:liked?'#e11d48':'var(--muted)', fontWeight:liked?600:400 }}>{liked?'❤️':'🤍'} {post.likeCount ?? post.likes.length}</button>
@@ -549,36 +646,77 @@ function CommunityTab({ state, update, showToast, onRegionSave }) {
               </div>
               {cmtExpanded && (
                 <div style={{ marginTop:14, paddingTop:14, borderTop:'1px solid var(--border)' }}>
-                  {post.comments.map(cmt => (
-                    <div key={cmt.id} style={{ marginBottom:14 }}>
-                      <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-                        <div style={{ width:28, height:28, borderRadius:'50%', background:'var(--bg-2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>🐾</div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
-                            <span style={{ fontSize:14, fontWeight:500 }}>{cmt.authorName}</span>
-                            <span className="badge badge-muted" style={{ fontSize:11 }}>{cmt.authorRegion}</span>
-                          </div>
-                          <div style={{ fontSize:14, color:'var(--text-2)', lineHeight:1.6 }}>{cmt.content}</div>
-                          <div style={{ display:'flex', gap:6, marginTop:5 }}>
-                            <button className="btn btn-ghost btn-sm" style={{ fontSize:12, padding:'3px 8px' }}>❤️ {cmt.likes}</button>
-                            <button className="btn btn-ghost btn-sm" style={{ fontSize:12, padding:'3px 8px' }} onClick={() => setReplyOpen(prev=>({...prev,[cmt.id]:!prev[cmt.id]}))}>↩ 대댓글</button>
-                          </div>
-                          {cmt.replies.map(rep => (
-                            <div key={rep.id} style={{ display:'flex', gap:8, marginTop:8, paddingLeft:12, borderLeft:'2px solid var(--border)' }}>
-                              <span style={{ fontSize:14, fontWeight:500, color:'var(--brand)' }}>{rep.authorName}</span>
-                              <span style={{ fontSize:14, color:'var(--text-2)' }}>{rep.content}</span>
+                  {post.comments.map(cmt => {
+                    const isEditingCmt = editingComment?.postId===post.id && editingComment?.cmtId===cmt.id
+                    const isMyCmt = cmt.authorId && cmt.authorId===currentUserId
+                    return (
+                      <div key={cmt.id} style={{ marginBottom:14 }}>
+                        <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                          <div style={{ width:28, height:28, borderRadius:'50%', background:'var(--bg-2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>🐾</div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                              <span style={{ fontSize:14, fontWeight:500 }}>{cmt.authorName}</span>
                             </div>
-                          ))}
-                          {replyOpen[cmt.id] && (
-                            <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                              <input className="fi" style={{ margin:0, fontSize:14 }} placeholder="대댓글 입력..." value={replyInputs[cmt.id]||''} onChange={e=>setReplyInputs(prev=>({...prev,[cmt.id]:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&handleAddReply(post.id,cmt.id)} />
-                              <button className="btn btn-primary btn-sm" onClick={() => handleAddReply(post.id,cmt.id)}>등록</button>
+                            {isEditingCmt ? (
+                              <div style={{ display:'flex', gap:8, marginBottom:4 }}>
+                                <input className="fi" style={{ margin:0, fontSize:14 }} value={editingComment.content} onChange={e=>setEditingComment(prev=>({...prev,content:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&handleSaveComment(post.id,cmt.id)} autoFocus />
+                                <button className="btn btn-primary btn-sm" onClick={()=>handleSaveComment(post.id,cmt.id)}>저장</button>
+                                <button className="btn btn-ghost btn-sm" onClick={()=>setEditingComment(null)}>취소</button>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize:14, color:'var(--text-2)', lineHeight:1.6 }}>{cmt.content}</div>
+                            )}
+                            <div style={{ display:'flex', gap:6, marginTop:5, alignItems:'center' }}>
+                              <button className="btn btn-ghost btn-sm" style={{ fontSize:12, padding:'3px 8px', color:cmt.liked?'#e11d48':'var(--muted)' }} onClick={()=>handleToggleCommentLike(post.id,cmt.id)}>{cmt.liked?'❤️':'🤍'} {cmt.likeCount||0}</button>
+                              <button className="btn btn-ghost btn-sm" style={{ fontSize:12, padding:'3px 8px' }} onClick={()=>setReplyOpen(prev=>({...prev,[cmt.id]:!prev[cmt.id]}))}>↩ 대댓글</button>
+                              {isMyCmt && !isEditingCmt && (
+                                <>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize:11, padding:'2px 6px', color:'var(--muted)' }} onClick={()=>setEditingComment({postId:post.id,cmtId:cmt.id,content:cmt.content})}>✏️</button>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize:11, padding:'2px 6px', color:'var(--danger)' }} onClick={()=>handleDeleteComment(post.id,cmt.id)}>🗑️</button>
+                                </>
+                              )}
                             </div>
-                          )}
+                            {cmt.replies.map(rep => {
+                              const isEditingRep = editingReply?.postId===post.id && editingReply?.cmtId===cmt.id && editingReply?.repId===rep.id
+                              const isMyRep = rep.authorId && rep.authorId===currentUserId
+                              const repLk = replyLikes[rep.id] ?? { count:rep.likeCount||0, liked:rep.liked||false }
+                              return (
+                                <div key={rep.id} style={{ display:'flex', gap:8, marginTop:8, paddingLeft:12, borderLeft:'2px solid var(--border)', alignItems:'flex-start' }}>
+                                  <div style={{ flex:1 }}>
+                                    <span style={{ fontSize:13, fontWeight:500, color:'var(--brand)', marginRight:4 }}>{rep.authorName}</span>
+                                    {isEditingRep ? (
+                                      <div style={{ display:'flex', gap:8, marginTop:4 }}>
+                                        <input className="fi" style={{ margin:0, fontSize:13 }} value={editingReply.content} onChange={e=>setEditingReply(prev=>({...prev,content:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&handleSaveReply(post.id,cmt.id,rep.id)} autoFocus />
+                                        <button className="btn btn-primary btn-sm" style={{ fontSize:12 }} onClick={()=>handleSaveReply(post.id,cmt.id,rep.id)}>저장</button>
+                                        <button className="btn btn-ghost btn-sm" style={{ fontSize:12 }} onClick={()=>setEditingReply(null)}>취소</button>
+                                      </div>
+                                    ) : (
+                                      <span style={{ fontSize:13, color:'var(--text-2)' }}>{rep.content}</span>
+                                    )}
+                                    <div style={{ display:'flex', gap:4, marginTop:3 }}>
+                                      <button className="btn btn-ghost btn-sm" style={{ fontSize:11, padding:'2px 6px', color:repLk.liked?'#e11d48':'var(--muted)' }} onClick={()=>handleToggleReplyLike(post.id,cmt.id,rep.id)}>{repLk.liked?'❤️':'🤍'} {repLk.count}</button>
+                                      {isMyRep && !isEditingRep && (
+                                        <>
+                                          <button className="btn btn-ghost btn-sm" style={{ fontSize:11, padding:'2px 6px', color:'var(--muted)' }} onClick={()=>setEditingReply({postId:post.id,cmtId:cmt.id,repId:rep.id,content:rep.content})}>✏️</button>
+                                          <button className="btn btn-ghost btn-sm" style={{ fontSize:11, padding:'2px 6px', color:'var(--danger)' }} onClick={()=>handleDeleteReply(post.id,cmt.id,rep.id)}>🗑️</button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            {replyOpen[cmt.id] && (
+                              <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                                <input className="fi" style={{ margin:0, fontSize:14 }} placeholder="대댓글 입력..." value={replyInputs[cmt.id]||''} onChange={e=>setReplyInputs(prev=>({...prev,[cmt.id]:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&handleAddReply(post.id,cmt.id)} />
+                                <button className="btn btn-primary btn-sm" onClick={() => handleAddReply(post.id,cmt.id)}>등록</button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   <div style={{ display:'flex', gap:8, marginTop:4 }}>
                     <input className="fi" style={{ margin:0, fontSize:14 }} placeholder="댓글을 입력하세요..." value={commentInputs[post.id]||''} onChange={e=>setCommentInputs(prev=>({...prev,[post.id]:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&handleAddComment(post.id)} />
                     <button className="btn btn-primary btn-sm" onClick={() => handleAddComment(post.id)}>등록</button>
@@ -743,6 +881,47 @@ function RankingTab() {
   )
 }
 
+/* ── InsuranceModal ── */
+function InsuranceModal({ pets, onClose, onRegister }) {
+  const [selPet,     setSelPet]     = useState(pets[0]?.petId || '')
+  const [selInsurer, setSelInsurer] = useState(INSURERS[0]?.id || '')
+  const availPets = pets.filter(p => !p.insurer)
+  return (
+    <Overlay title="보험 계약 등록" sub="반려동물과 보험사를 선택하세요" onClose={onClose}>
+      <label className="fl">반려동물 선택</label>
+      {availPets.length === 0 ? (
+        <div className="alert alert-info" style={{ marginBottom:14 }}>모든 반려동물에 보험이 등록되어 있습니다.</div>
+      ) : (
+        <select className="fi" value={selPet} onChange={e=>setSelPet(e.target.value)}>
+          <option value="">-- 선택하세요 --</option>
+          {pets.map(p => (
+            <option key={p.petId} value={p.petId} disabled={!!p.insurer}>{p.name} ({p.breed}){p.insurer ? ` — ${p.insurer} 가입중` : ''}</option>
+          ))}
+        </select>
+      )}
+      <label className="fl" style={{ marginTop:8 }}>보험사</label>
+      <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16 }}>
+        {INSURERS.map(ins => (
+          <div key={ins.id} onClick={() => setSelInsurer(ins.id)}
+            style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:10, cursor:'pointer',
+              border:`1.5px solid ${selInsurer===ins.id?'var(--brand)':'var(--border)'}`,
+              background:selInsurer===ins.id?'var(--brand-xl)':'var(--surface)', transition:'all .15s' }}>
+            <span style={{ fontSize:18 }}>{ins.logo}</span>
+            <span style={{ fontWeight:selInsurer===ins.id?600:400, fontSize:15 }}>{ins.name}</span>
+            {selInsurer===ins.id && <span style={{ marginLeft:'auto', color:'var(--brand)', fontWeight:700 }}>✓</span>}
+          </div>
+        ))}
+      </div>
+      <div className="fi-note" style={{ marginBottom:16 }}>📌 보험 등록 후 동의 관리 탭에서 진료기록별 동의를 설정하세요.</div>
+      <button className="btn btn-primary" style={{ width:'100%', padding:13, fontSize:15, justifyContent:'center' }}
+        disabled={!selPet || !selInsurer || availPets.length===0}
+        onClick={() => onRegister(selPet, selInsurer)}>
+        등록 완료
+      </button>
+    </Overlay>
+  )
+}
+
 /* ── Main ── */
 export default function GuardianDash({ showToast, onLogout, initialTab = null, onHome }) {
   const { state, update, toggleConsent, addPet } = useApp()
@@ -752,6 +931,9 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
   const [modal,        setModal]        = useState(null)
   const [detailRecord, setDetailRecord] = useState(null)
   const [newPet,       setNewPet]       = useState({ name:'', species:'dog', breed:'', birthYear:'', chipNo:'', petId:'' })
+  const [consentModal,      setConsentModal]      = useState(null)   // recordId of pending consent
+  const [consentInsurerId,  setConsentInsurerId]  = useState(INSURERS[0]?.id || '')
+  const [consentCreating,   setConsentCreating]   = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -787,6 +969,38 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
   const handleRegionSave = async region => {
     update({ userRegion:region }); showToast('지역 설정 완료',`거주지역이 ${region}(으)로 설정되었습니다`)
     try { await apiFetch('/users/me',{method:'PATCH',body:{region}}) } catch { /* 서버 미연결 시 로컬 상태만 갱신 */ }
+  }
+
+  const handleStartConsent = (recordId) => {
+    setConsentInsurerId(INSURERS[0]?.id || '')
+    setConsentModal(recordId)
+  }
+
+  const handleCreateConsent = async () => {
+    if (!consentInsurerId || !consentModal || consentCreating) return
+    setConsentCreating(true)
+    try {
+      const c = state.consents[consentModal]
+      await apiFetch('/consents', { method:'POST', body:{ recordId:consentModal, insurerId:consentInsurerId, guardianId:'me' } })
+      showToast('동의 생성 완료', `${c?.pet || consentModal} — 보험사에 서류 자동 전달 시작`)
+      // 동의 목록 갱신
+      const res = await apiFetch('/consents?guardianId=me')
+      const a = Array.isArray(res?.consents) ? res.consents : (Array.isArray(res?.content) ? res.content : [])
+      if (a.length > 0) {
+        const sm = {ACTIVE:'active',REVOKED:'revoked',PENDING:'pending',EXPIRED:'revoked'}
+        const m = {}
+        a.forEach(item => {
+          const k = String(item.recordId)
+          m[k] = { consentId:String(item.consentId||item.id||''), recordId:k, guardianId:item.guardianId, insurerId:item.insurerId||'', status:sm[item.status]||(item.status||'').toLowerCase(), insurerName:item.insurerName||item.insurerId||'', pet:item.petName||'', disease:item.disease||'', hospital:item.hospitalName||'', cost:item.cost||0 }
+        })
+        update({ consents:m })
+      }
+      setConsentModal(null)
+    } catch (e) {
+      showToast('동의 생성 실패', e?.message || '서버 오류가 발생했습니다')
+    } finally {
+      setConsentCreating(false)
+    }
   }
   const openPetModal = () => {
     const petId = generatePetId(state.pets.map(p=>p.petId))
@@ -905,7 +1119,7 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
                     <span style={{ fontSize:13, fontWeight:600, color:'var(--success)', textTransform:'uppercase', letterSpacing:'.06em' }}>동의 완료 — {consents.filter(c=>c.status==='active').length}건 전송 중</span>
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    {consents.filter(c=>c.status==='active').map(c=><ConsentCard key={c.recordId} c={c} onToggle={handleToggle}/>)}
+                    {consents.filter(c=>c.status==='active').map(c=><ConsentCard key={c.recordId} c={c} onToggle={handleToggle} onStartConsent={handleStartConsent}/>)}
                   </div>
                 </div>
               )}
@@ -916,7 +1130,7 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
                     <span style={{ fontSize:13, fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.06em' }}>미동의 / 철회 — {consents.filter(c=>c.status!=='active').length}건</span>
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    {consents.filter(c=>c.status!=='active').map(c=><ConsentCard key={c.recordId} c={c} onToggle={handleToggle}/>)}
+                    {consents.filter(c=>c.status!=='active').map(c=><ConsentCard key={c.recordId} c={c} onToggle={handleToggle} onStartConsent={handleStartConsent}/>)}
                   </div>
                 </div>
               )}
@@ -1000,17 +1214,37 @@ export default function GuardianDash({ showToast, onLogout, initialTab = null, o
 
       {/* 보험 계약 모달 */}
       {modal==='ins' && (
-        <Overlay title="보험 계약 등록" sub="가입된 펫보험 정보를 입력하세요" onClose={() => setModal(null)}>
-          <label className="fl">보험사</label>
-          <select className="fi"><option>DB손해보험</option><option>현대해상</option><option>KB손해보험</option><option>메리츠화재</option></select>
-          <label className="fl">상품명</label><input className="fi" placeholder="펫블리 반려동물보험"/>
-          <label className="fl">증권번호</label><input className="fi" placeholder="2024-XXXXXXXX"/>
-          <div className="fi-row">
-            <div><label className="fl">계약 시작일</label><input className="fi" type="date"/></div>
-            <div><label className="fl">계약 종료일</label><input className="fi" type="date"/></div>
+        <InsuranceModal
+          pets={state.pets}
+          onClose={() => setModal(null)}
+          onRegister={(petId, insurerId) => {
+            const ins = INSURERS.find(i => i.id === insurerId)
+            update({ pets: state.pets.map(p => p.petId===petId ? {...p, insurer:ins?.name||insurerId} : p) })
+            setModal(null)
+            showToast('보험 등록 완료', `${ins?.name||insurerId} 연동이 완료되었습니다`)
+          }}
+        />
+      )}
+
+      {/* 보험사 선택 → 동의 생성 모달 */}
+      {consentModal && (
+        <Overlay title="보험사 선택 후 동의" sub={`진료기록 ${consentModal}에 대한 동의를 시작합니다`} onClose={() => setConsentModal(null)}>
+          <label className="fl">보험사 선택</label>
+          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
+            {INSURERS.map(ins => (
+              <div key={ins.id} onClick={() => setConsentInsurerId(ins.id)} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderRadius:10, cursor:'pointer', border:`1.5px solid ${consentInsurerId===ins.id?'var(--brand)':'var(--border)'}`, background:consentInsurerId===ins.id?'var(--brand-xl)':'var(--surface)', transition:'all .15s' }}>
+                <span style={{ fontSize:18 }}>{ins.logo}</span>
+                <span style={{ fontWeight:consentInsurerId===ins.id?600:400, fontSize:15 }}>{ins.name}</span>
+                {consentInsurerId===ins.id && <span style={{ marginLeft:'auto', color:'var(--brand)', fontWeight:700 }}>✓</span>}
+              </div>
+            ))}
           </div>
-          <div className="fi-note" style={{ marginBottom:16 }}>📌 증권번호는 AES-256 암호화 저장됩니다.</div>
-          <button className="btn btn-primary" style={{ width:'100%', padding:13, fontSize:15, justifyContent:'center' }} onClick={() => { setModal(null); showToast('보험 등록','보험 계약 등록 완료') }}>등록 완료</button>
+          <div className="alert alert-info" style={{ marginBottom:16 }}>
+            ℹ️ 동의 유효기간 1년 · 언제든지 철회 가능 · 철회 즉시 보험사 접근 차단
+          </div>
+          <button className="btn btn-primary" style={{ width:'100%', padding:13, fontSize:15, justifyContent:'center' }} onClick={handleCreateConsent} disabled={!consentInsurerId||consentCreating}>
+            {consentCreating ? '처리 중...' : '동의 생성 및 전달 시작'}
+          </button>
         </Overlay>
       )}
 

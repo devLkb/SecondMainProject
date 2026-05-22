@@ -61,9 +61,24 @@ public class PostDtos {
 
     /* ── 응답 ─────────────────────────────────────────────────────────── */
 
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+    public static class UpdatePostRequest {
+        @NotBlank(message = "게시물 내용을 입력해주세요.")
+        @Size(max = 5000, message = "게시물 내용은 5000자 이내여야 합니다.")
+        private String content;
+    }
+
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+    public static class UpdateCommentRequest {
+        @NotBlank(message = "댓글 내용을 입력해주세요.")
+        @Size(max = 1000, message = "댓글은 1000자 이내여야 합니다.")
+        private String content;
+    }
+
     @Getter @Builder
     public static class PostResponse {
         private Long id;
+        private Long authorId;
         private String authorName;
         private String authorRegion;
         private String petName;
@@ -79,6 +94,7 @@ public class PostDtos {
     @Getter @Builder
     public static class PostSummaryResponse {
         private Long id;
+        private Long authorId;
         private String authorName;
         private String authorRegion;
         private String petName;
@@ -94,6 +110,7 @@ public class PostDtos {
     @Getter @Builder
     public static class PostDetailResponse {
         private Long id;
+        private Long authorId;
         private String authorName;
         private String authorRegion;
         private String petName;
@@ -109,10 +126,20 @@ public class PostDtos {
     @Getter @Builder
     public static class CommentResponse {
         private Long id;
+        private Long authorId;
         private String authorName;
         private String content;
+        private long likeCount;
+        private boolean liked;
         private List<CommentResponse> replies;
         private LocalDateTime createdAt;
+    }
+
+    @Getter @AllArgsConstructor
+    public static class CommentLikeResponse {
+        private Long commentId;
+        private boolean liked;
+        private long likeCount;
     }
 
     @Getter @Builder

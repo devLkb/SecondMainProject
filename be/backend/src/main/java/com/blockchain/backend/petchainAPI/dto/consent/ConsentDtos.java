@@ -22,10 +22,11 @@ public final class ConsentDtos {
 
     // 동의 카드/목록이 그대로 렌더링할 수 있도록 펫·병원·보험사 이름과 진료 정보를 함께 내려준다.
     // recordHash 는 보험사 검증 호출(verifySubmission)이 실제 해시를 보낼 수 있도록 함께 노출한다.
+    // PENDING 상태(동의 미생성)일 때는 consentId, insurerId 가 null 일 수 있다.
     public record ConsentResponse(
-            @NotBlank String consentId,
+            String consentId,
             @NotBlank String recordId,
-            @NotBlank String insurerId,
+            String insurerId,
             @NotBlank String guardianId,
             @NotNull ConsentStatus status,
             Instant validFrom,

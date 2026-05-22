@@ -17,4 +17,6 @@ public interface PointApiPort {
     PointDtos.SpendSaasCreditsResponse spendSaasCredits(ApiActor actor,
                                                         String hospitalId,
                                                         PointDtos.SpendSaasCreditsRequest request);
+
+    PointDtos.PointBalanceResponse chargePoints(ApiActor actor, String insurerId, PointDtos.ChargePointsRequest request);
 }
