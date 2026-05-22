@@ -18,14 +18,14 @@ frontend (Nginx, React 정적 파일)
   ├─ /        → /usr/share/nginx/html 의 SPA 파일 서빙
   └─ /api/*   → backend:8080 으로 reverse proxy
         ▼
-backend (Spring Boot, prod profile)
+backend (Spring Boot, base profile for first deployment)
         ▼
 mysql (MySQL 8.0, mysql_data 볼륨)
 ```
 
 - 외부 공개 포트는 기본적으로 `frontend`의 `APP_PORT` 하나다.
 - `backend`와 `mysql`은 Compose 내부 네트워크에서만 접근한다.
-- 운영 기본값은 `SPRING_PROFILES_ACTIVE=prod`다.
+- 첫 배포 기본값은 `SPRING_PROFILES_ACTIVE`를 비워 base profile로 실행하는 것이다. prod는 스키마 적재/마이그레이션 방식을 확정한 뒤 켠다.
 
 ## 2. 주요 파일
 
@@ -110,7 +110,7 @@ AWS 도메인이 `https://petchain.example.com`이면 다음 값들이 같은 �
 
 ```dotenv
 APP_PORT=80
-SPRING_PROFILES_ACTIVE=prod
+SPRING_PROFILES_ACTIVE=
 FRONTEND_URL=https://petchain.example.com
 CORS_ALLOWED_ORIGINS=https://petchain.example.com
 GOOGLE_REDIRECT_URI=https://petchain.example.com/api/auth/oauth/google/callback
@@ -118,7 +118,7 @@ NAVER_REDIRECT_URI=https://petchain.example.com/api/auth/oauth/naver/callback
 KAKAO_REDIRECT_URI=https://petchain.example.com/api/auth/oauth/kakao/callback
 ```
 
-`SPRING_PROFILES_ACTIVE`는 `docker-compose.yml`에서 기본값이 `prod`이므로 생략해도 AWS 배포에서는 운영 프로파일로 실행된다.
+첫 배포에서는 `SPRING_PROFILES_ACTIVE`를 비워 두면 엔티티 기준으로 스키마가 자동 생성된다. `prod`로 바꾸려면 먼저 `db/schema.sql` 적재 또는 별도 마이그레이션을 준비한다.
 
 ## 5. 배포 명령
 
@@ -192,7 +192,7 @@ ALB를 사용할 경우 대상 그룹은 EC2의 `APP_PORT`로 전달하고, Secu
 ## 8. 운영 주의사항
 
 - `docker-compose.yml`은 AWS EC2 Compose 배포 기준이며 ECS/Fargate 태스크 정의를 대체하지 않는다.
-- 백엔드는 AWS 배포 기본값으로 `SPRING_PROFILES_ACTIVE=prod`를 사용한다.
+- 백엔드는 첫 배포 기본값으로 base profile을 사용하고, `SPRING_PROFILES_ACTIVE=prod`는 스키마 준비 후 전환한다.
 - `application-prod.properties`는 `spring.jpa.hibernate.ddl-auto=validate`로 동작한다.
 - 별도 마이그레이션 도구가 없으므로 빈 DB에서 바로 `prod`로 기동하면 스키마 검증 실패가 날 수 있다.
 - 운영 전에는 DB 스키마 생성/마이그레이션 방식과 백업 정책을 별도로 확정해야 한다.
