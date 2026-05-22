@@ -70,8 +70,18 @@ function AdminLogin({ onLogin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ loginId, password: loginPw }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || '로그인에 실패했습니다.')
+      const text = await res.text()
+      const contentType = res.headers.get('content-type') || ''
+      let data = {}
+      if (text && contentType.includes('application/json')) {
+        try { data = JSON.parse(text) } catch { data = {} }
+      }
+      if (!res.ok) {
+        if (text.includes('Invalid CORS request')) {
+          throw new Error('CORS 설정이 현재 프론트엔드 주소를 허용하지 않습니다.')
+        }
+        throw new Error(data.message || text || '로그인에 실패했습니다.')
+      }
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)

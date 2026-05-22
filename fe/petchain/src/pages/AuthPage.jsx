@@ -71,13 +71,30 @@ export default function AuthPage({ mode, onLogin, onBack }) {
   const desc     = { guardian: '반려동물 보험 청구를 위한 계정', hospital: '동물병원 진료기록 등록 계정' }
 
   async function api(path, body) {
-    const res = await fetch(`/api${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || '요청에 실패했습니다.')
+    let res
+    try {
+      res = await fetch(`/api${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } catch {
+      throw new Error('백엔드 서버에 연결할 수 없습니다. 서버 실행 상태를 확인해주세요.')
+    }
+
+    const text = await res.text()
+    const contentType = res.headers.get('content-type') || ''
+    let data = {}
+    if (text && contentType.includes('application/json')) {
+      try { data = JSON.parse(text) } catch { data = {} }
+    }
+
+    if (!res.ok) {
+      if (text.includes('Invalid CORS request')) {
+        throw new Error('CORS 설정이 현재 프론트엔드 주소를 허용하지 않습니다.')
+      }
+      throw new Error(data.message || text || '요청에 실패했습니다.')
+    }
     return data
   }
 
@@ -99,7 +116,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
           const meData = await me.json()
           localStorage.setItem('memberName', meData.name || '')
         }
-      } catch (_) {}
+      } catch { /* 선택 정보 조회 실패는 로그인 성공을 막지 않는다. */ }
       onLogin(ROLE_MAP[data.memberType?.toUpperCase()] || role)
     } catch (e) {
       // 네트워크/서버 오류든 자격증명 오류든 실패를 그대로 표시한다(가짜 로그인 폴백 없음).

@@ -66,6 +66,24 @@ CHAIN_MSP_ID="$(env_or_file CHAIN_MSP_ID "Org1MSP")"
 CHAIN_PEER_ENDPOINT="$(env_or_file CHAIN_PEER_ENDPOINT "localhost:7051")"
 CHAIN_PEER_HOST_OVERRIDE="$(env_or_file CHAIN_PEER_HOST_OVERRIDE "peer0.org1.example.com")"
 
+# 이 스크립트는 백엔드를 Docker Compose 네트워크가 아닌 호스트에서 bootRun 으로 실행한다.
+# 따라서 배포용 .env 의 DB_HOST=mysql 대신 로컬 접속 주소를 별도로 사용한다.
+LOCAL_DB_HOST="$(env_or_file LOCAL_DB_HOST "127.0.0.1")"
+LOCAL_DB_PORT="$(env_or_file LOCAL_DB_PORT "3306")"
+LOCAL_DB_NAME="$(env_or_file LOCAL_DB_NAME "petchain")"
+LOCAL_DB_USERNAME="$(env_or_file LOCAL_DB_USERNAME "root")"
+LOCAL_DB_PASSWORD="$(env_or_file LOCAL_DB_PASSWORD "1234")"
+LOCAL_FRONTEND_URL="$(env_or_file LOCAL_FRONTEND_URL "http://localhost:5173")"
+LOCAL_CORS_ALLOWED_ORIGINS="$(env_or_file LOCAL_CORS_ALLOWED_ORIGINS "${LOCAL_FRONTEND_URL},http://127.0.0.1:5173")"
+
+mysql_host_status() {
+  mysqladmin -h "$LOCAL_DB_HOST" -P "$LOCAL_DB_PORT" -u "$LOCAL_DB_USERNAME" -p"$LOCAL_DB_PASSWORD" status >/dev/null 2>&1
+}
+
+mysql_container_status() {
+  docker exec petchain-mysql mysqladmin -u "$LOCAL_DB_USERNAME" -p"$LOCAL_DB_PASSWORD" status >/dev/null 2>&1
+}
+
 echo "=============================="
 echo " PetChain 스택 시작"
 echo "=============================="
@@ -130,24 +148,60 @@ echo "[4/4] Spring Boot 백엔드 빌드 + 시작..."
 cd "$BACKEND_DIR"
 
 # MySQL 확인 (로컬 또는 Docker)
-if ! mysqladmin -u root -p1234 status 2>/dev/null; then
-  echo "⚠️  로컬 MySQL이 없습니다. Docker로 MySQL 시작..."
+if ! mysql_host_status; then
+  echo "⚠️  로컬 MySQL 접속이 아직 안 됩니다. petchain-mysql 컨테이너를 확인합니다..."
   docker start petchain-mysql 2>/dev/null || \
     docker run -d --name petchain-mysql \
-      -e MYSQL_ROOT_PASSWORD=1234 \
-      -e MYSQL_DATABASE=petchain \
-      -p 3306:3306 mysql:8.0 \
+      -e MYSQL_ROOT_PASSWORD="$LOCAL_DB_PASSWORD" \
+      -e MYSQL_DATABASE="$LOCAL_DB_NAME" \
+      -p "$LOCAL_DB_PORT:3306" mysql:8.0 \
       --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
   echo "MySQL 준비 대기..."
-  until docker exec petchain-mysql mysqladmin ping -uroot -p1234 --silent 2>/dev/null; do sleep 2; done
+  for _ in {1..60}; do
+    if mysql_host_status; then
+      break
+    fi
+    sleep 2
+  done
+
+  if ! mysql_host_status; then
+    echo "❌ MySQL 접속 실패: ${LOCAL_DB_HOST}:${LOCAL_DB_PORT}, user=${LOCAL_DB_USERNAME}, db=${LOCAL_DB_NAME}" >&2
+
+    if mysql_container_status; then
+      echo "   컨테이너 내부에서는 접속됩니다. 호스트 포트 바인딩 또는 LOCAL_DB_HOST/LOCAL_DB_PORT 문제입니다." >&2
+      echo "   확인: docker port petchain-mysql 3306/tcp" >&2
+    else
+      echo "   컨테이너 내부에서도 이 계정/비밀번호로 접속되지 않습니다." >&2
+      echo "   기존 petchain-mysql 컨테이너가 다른 LOCAL_DB_PASSWORD 로 초기화됐을 수 있습니다." >&2
+      echo "   확인: docker exec petchain-mysql mysqladmin -u${LOCAL_DB_USERNAME} -p'<비밀번호>' ping" >&2
+    fi
+
+    echo "   컨테이너 상태:" >&2
+    docker ps -a --filter name=petchain-mysql --format '   {{.Names}} {{.Status}} {{.Ports}}' >&2 || true
+    exit 1
+  fi
 fi
+
+# bootRun 은 호스트에서 실행되므로 compose 서비스명(mysql)이 아니라 로컬 접속값을 우선 전달한다.
+export PETCHAIN_ENV_FILE="$ENV_FILE"
+export DB_HOST="$LOCAL_DB_HOST"
+export DB_PORT="$LOCAL_DB_PORT"
+export DB_NAME="$LOCAL_DB_NAME"
+export DB_USERNAME="$LOCAL_DB_USERNAME"
+export DB_PASSWORD="$LOCAL_DB_PASSWORD"
+export FRONTEND_URL="$LOCAL_FRONTEND_URL"
+export CORS_ALLOWED_ORIGINS="$LOCAL_CORS_ALLOWED_ORIGINS"
 
 echo ""
 echo "=============================="
 echo " 모든 준비 완료! 백엔드 실행"
 echo " http://localhost:8080"
 echo "=============================="
-./gradlew bootRun &
+# bootRun 은 서버 프로세스라 정상 실행 중에는 종료되지 않는다.
+# --console=plain: Gradle 의 "80% EXECUTING" 진행 UI가 멈춘 것처럼 보이지 않게 한다.
+# --no-daemon: Ctrl+C 시 이 스크립트가 백엔드 프로세스를 확실히 정리할 수 있게 한다.
+./gradlew --no-daemon --console=plain bootRun &
 BACKEND_PID=$!
 
 # ── 5. 프론트엔드 개발 서버 기동 ─────────────────────────────────
