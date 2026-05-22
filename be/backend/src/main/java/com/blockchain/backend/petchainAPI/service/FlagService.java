@@ -3,6 +3,7 @@ package com.blockchain.backend.petchainAPI.service;
 import com.blockchain.backend.petchainAPI.dto.flag.FlagDtos;
 import com.blockchain.backend.petchainAPI.error.ApiErrorCode;
 import com.blockchain.backend.petchainAPI.error.ApiException;
+import com.blockchain.backend.petchainAPI.security.ActorType;
 import com.blockchain.backend.petchainAPI.security.ApiActor;
 import com.blockchain.backend.petchainDB.entity.InsuranceCompany;
 import com.blockchain.backend.petchainDB.entity.RecordFlag;
@@ -74,7 +75,13 @@ public class FlagService {
 
     @Transactional(readOnly = true)
     public List<FlagDtos.FlagResponse> listFlags(ApiActor actor) {
-        // 전체 신고 목록은 플랫폼 관리자만 조회 가능.
+        // 보험사는 자신이 신고한 건만 조회. 플랫폼 관리자는 전체 조회.
+        if (actor.actorType() == ActorType.INSURER) {
+            InsuranceCompany insurer = support.insurerByActor(actor);
+            return recordFlagRepository.findByReportedByInsurerIdOrderByCreatedAtDesc(insurer.getId()).stream()
+                    .map(this::toResponse)
+                    .toList();
+        }
         support.requireAdmin(actor);
         return recordFlagRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(this::toResponse)
