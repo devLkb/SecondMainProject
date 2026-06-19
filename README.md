@@ -1,125 +1,185 @@
-작업을 시작하기 전에 이 규칙을 먼저 읽고, 기존 프로젝트 구조를 확인한 뒤 수정한다.
-
-# Coding Rules
-
-## 1. 환경 변수
-
-- `.env`는 프로젝트 최상위에 있는 하나만 사용한다.
-- 백엔드, 프론트엔드, Docker Compose는 모두 최상위 `.env`를 기준으로 한다.
-- 하위 폴더에 별도의 `.env` 파일을 새로 만들지 않는다.
-
-## 2. API 응답
-
-- Entity를 API 응답으로 직접 반환하지 않는다.
-- 외부로 반환하는 데이터는 DTO를 사용한다.
-
-## 3. 온체인 데이터
-
-- 온체인에는 원문 데이터를 저장하지 않는다.
-- 진료기록 원문, 보호자 개인정보, 마이크로칩 원문 번호 등 민감한 정보는 체인에 올리지 않는다.
-- 온체인에는 해시값, 식별자, 상태값, 검증 결과처럼 필요한 최소 정보만 저장한다.
-
-## 4. Controller 역할
-
-- Controller에는 비즈니스 로직을 넣지 않는다.
-- Controller는 요청을 받고 응답을 반환하는 역할만 담당한다.
-- 실제 로직은 Service 계층에서 처리한다.
-
-## 5. API 응답 형식
-
-- API 응답 형식은 프로젝트 전체에서 통일한다.
-- 성공 응답과 실패 응답의 구조를 일관되게 유지한다.
-
-## 6. 폴더 구조
-
-- 임의로 폴더 구조를 새로 만들지 않는다.
-- 기존 구조로 해결 가능하면 기존 패키지와 폴더 규칙을 따른다.
-- 새 폴더가 필요할 경우 기존 구조와 역할을 먼저 확인한 뒤 생성한다.
-
-## 7. README 관리
-
-- 실행 방법이 바뀌면 README도 같이 수정한다.
-- 환경 변수, 포트, Docker 실행 방식, API 사용 방법이 바뀌면 문서에 반영한다.
-
-## 8. 불필요한 파일과 의존성
-
-- 사용하지 않는 파일은 남기지 않는다.
-- 사용하지 않는 의존성은 제거한다.
-- 테스트용 임시 코드, 백업 파일, 복사본 파일을 작업 결과에 남기지 않는다.
-
-------------------------------------------------------------------------------------------------------------------------------------
-
 # PetChain
 
-블록체인 기반 펫보험 진료기록 검증 인프라
+Hyperledger Fabric 기반 펫보험 진료기록 검증 인프라 서비스입니다.
 
-## Docker Compose 실행
+진료 원문은 병원 측 DB에 보관하고, 블록체인에는 해시·동의 상태·검증 로그만 기록하여 병원의 데이터 통제권과 보험사의 무결성 검증 요구를 분리한 구조입니다.
 
-프론트엔드(Nginx), 백엔드(Spring Boot), MySQL을 함께 배포하려면 최상위 `.env.example`을 `.env`로 복사해 비밀값과 공개 URL을 채운 뒤 실행한다. 전체 구조와 운영 명령은 [`docker_guide.md`](docker_guide.md)를 기준으로 한다.
+## 프로젝트 개요
+
+| 항목 | 내용 |
+|------|------|
+| 개발 기간 | 2026.05.04 ~ 2026.05.23 (3주) |
+| 팀 규모 | 5인 (백엔드 / 프론트엔드 / 블록체인 협업) |
+| 담당 역할 | 백엔드 API 계층 설계 및 구현, Docker/AWS 배포 |
+| 백엔드 | Java, Spring Boot |
+| 프론트엔드 | React, Vite |
+| 데이터베이스 | MySQL |
+| 블록체인 | Hyperledger Fabric, Golang |
+| 배포 | Docker, Docker Compose, AWS EC2 |
+
+## 백엔드 아키텍처
+
+### 레이어 구조
+
+컨트롤러가 구체 Service가 아닌 Port 인터페이스에 의존하는 구조로 설계하여, 테스트나 구현에서 Port 구현체를 교체할 수 있도록 분리했습니다.
+
+```
+HTTP 요청
+  │
+  ▼
+Controller        ← REST 엔드포인트, 요청 검증, ApiActor 주입
+  │
+  ▼
+Port 인터페이스    ← 유스케이스별 입출력 계약
+  │
+  ▼
+Service 구현체     ← 비즈니스 로직, JPA/블록체인 연동
+  │
+  ▼
+DTO / Error / Common
+```
+
+### 핵심 비즈니스 흐름
+
+```
+[병원] 진료기록 등록 (파일 업로드 + SHA-256 해시 생성)
+  │
+  ▼
+[보호자] 진료기록 제출 동의 (recordId + insurerId 기반)
+  │
+  ▼
+[보험사] 제출 요청 → 검증 요청 (Idempotency-Key 지원)
+  │
+  ├─ 해시 비교로 변조 여부 검증
+  ├─ 검증 결과·비식별 데이터·감사 로그 조회
+  └─ 포인트 차감 / 병원 크레딧 적립
+```
+
+## 내가 담당한 코드
+
+API 계층 전체(`petchainAPI` 패키지)를 설계하고 핵심 모듈을 구현했습니다.
+
+```
+be/backend/src/main/java/com/blockchain/backend/petchainAPI/
+├── controller/
+│   ├── RecordController.java              ← 진료기록 등록/조회
+│   ├── ConsentController.java             ← 동의 생성/조회/철회
+│   ├── SubmissionController.java          ← 제출/검증 요청/보험금 심사
+│   ├── VerificationController.java        ← 검증 결과/비식별 데이터/감사 로그
+│   ├── InternalVerificationController.java ← 내부 검증 (강제/재시도)
+│   ├── PointController.java               ← 포인트/크레딧 조회·충전·차감
+│   └── AdminController.java               ← 관리자 포인트 발급/취소
+├── port/                                   ← 유스케이스 인터페이스 (7개)
+├── service/                                ← Port 구현체
+├── dto/
+│   ├── common/     ← 공통 응답 조각, 상태 enum
+│   ├── record/     ├── consent/     ├── submission/
+│   ├── verification/    ├── point/     └── admin/
+├── error/
+│   ├── ApiErrorCode.java          ← 도메인 에러 코드 ↔ HTTP 상태 매핑
+│   ├── ApiException.java          ← 커스텀 런타임 예외
+│   ├── ApiExceptionHandler.java   ← @RestControllerAdvice 전역 예외 처리
+│   ├── ApiErrorResponse.java      ← 통일된 에러 응답 포맷
+│   └── TraceIds.java              ← 요청별 trace ID 추출
+└── security/                       ← 별도 팀원이 구현한 JWT 인증 위에서 동작
+```
+
+> 커뮤니티(Post), 신고(Flag), 플랫폼 관리(PlatformAdmin), 파일 업로드(FileUpload) 컨트롤러는 다른 팀원이 담당했습니다.
+
+## API 명세
+
+### 진료기록 (Record)
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/api/records` | 진료기록 등록 (멀티파트 파일 업로드) |
+| GET | `/api/records` | 진료기록 목록 조회 |
+| GET | `/api/records/{recordId}` | 진료기록 상세 조회 |
+
+### 동의 (Consent)
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/api/consents` | 동의 생성 (보호자 → 보험사) |
+| GET | `/api/consents` | 동의 목록 조회 (필터: recordId, guardianId, insurerId) |
+| GET | `/api/consents/{consentId}` | 동의 상세 조회 |
+| POST | `/api/consents/{consentId}/revoke` | 동의 철회 |
+
+### 제출/검증 (Submission + Verification)
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/api/submissions` | 진료기록 제출 (보험사 검토 대상) |
+| GET | `/api/submissions/{submissionId}` | 제출 상세 조회 |
+| GET | `/api/submissions/{submissionId}/package` | 검토 패키지 조회 (서명 URL, 해시, 동의 스냅샷) |
+| POST | `/api/submissions/{submissionId}/verification` | 검증 요청 (Idempotency-Key 지원) |
+| POST | `/api/submissions/{submissionId}/claim-status` | 보험금 심사 상태 갱신 |
+| GET | `/api/verifications/{verificationId}` | 검증 결과 조회 |
+| GET | `/api/verifications/{verificationId}/deidentified-data` | 비식별 데이터 조회 |
+| GET | `/api/verifications/{verificationId}/audit` | 감사 로그 조회 |
+
+### 포인트/크레딧 (Point)
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/api/insurers/{insurerId}/points/balance` | 보험사 포인트 잔액 |
+| GET | `/api/insurers/{insurerId}/points/transactions` | 보험사 포인트 거래 내역 |
+| POST | `/api/insurers/{insurerId}/points/charge` | 보험사 포인트 충전 |
+| POST | `/api/hospitals/{hospitalId}/credits/spend/saas` | 병원 SaaS 크레딧 차감 |
+| POST | `/api/admin/insurers/{insurerId}/points/issue` | 관리자 포인트 발급 |
+| POST | `/api/admin/points/{transactionId}/reversal` | 관리자 거래 취소 |
+
+## 오류 처리 구조
+
+컨트롤러마다 try-catch를 분산시키지 않고, 전역 예외 핸들러에서 통일된 응답 포맷으로 변환합니다.
+
+```
+서비스에서 throw new ApiException(ApiErrorCode.CONSENT_REVOKED, "동의가 철회되었습니다")
+  │
+  ▼
+ApiExceptionHandler (@RestControllerAdvice)
+  │
+  ▼
+{
+  "errorCode": "CONSENT_REVOKED",
+  "message": "동의가 철회되었습니다",
+  "traceId": "abc-123",
+  "details": {}
+}
+  → HTTP 409 Conflict
+```
+
+주요 에러 코드 예시:
+
+| 에러 코드 | HTTP 상태 | 설명 |
+|-----------|-----------|------|
+| `CONSENT_REVOKED` | 409 | 동의 철회 상태 |
+| `INSUFFICIENT_POINTS` | 402 | 포인트 부족 |
+| `RECORD_HASH_MISMATCH` | 409 | 진료기록 해시 불일치 (변조 의심) |
+| `SUBMISSION_NOT_FOUND` | 404 | 제출 건 없음 |
+| `VALIDATION_FAILED` | 400 | 요청 검증 실패 |
+
+## Trouble Shooting
+
+**컨테이너 의존성 버전 불일치**
+
+Docker Compose 환경에서 백엔드 실행 시 컨테이너 의존성 버전 불일치로 에러가 발생했습니다. 해당 의존성을 로컬에 직접 설치하지 않고 Docker 이미지로 관리하여 해결했습니다. 서버 환경 오염을 방지하고 Docker 도입 취지에 부합하는 방식으로 처리했습니다.
+
+## 실행 방법
+
+### Docker Compose (권장)
 
 ```bash
 cp .env.example .env
+# .env에 DB 비밀번호, API 키 등 설정
 docker compose up -d --build
 ```
 
-## 프로젝트 목적
-
-PetChain은 반려동물 보험 청구 과정에서 발생하는 진료기록 신뢰성 문제를 해결하기 위한 프로젝트입니다.
-
-동물병원마다 서로 다른 형식으로 관리되는 진료기록을 표준화하고, 진료기록의 위·변조 여부를 검증할 수 있도록 Hyperledger Fabric 기반의 컨소시엄 블록체인 구조를 사용합니다.
-
-이 프로젝트의 핵심 목적은 보험 가입을 돕는 것이 아니라, 이미 보험에 가입한 보호자가 보험금을 청구할 때 필요한 진료기록을 더 신뢰할 수 있는 형태로 관리하고 검증하는 것입니다.
-
-## 서비스 정체성
-
-PetChain은 보험상품을 추천하거나 비교하거나 판매하는 서비스가 아닙니다.
-
-또한 보험 가입을 중개하거나 보험료 결제를 대행하지 않습니다. 보험금 지급 여부, 지급 금액, 약관 적용 여부도 PetChain이 판단하지 않습니다.
-
-PetChain은 보험계약 체결 이후의 단계에서 동물병원 진료기록을 표준화하고, 무결성을 검증하며, 보호자의 동의에 따라 보험사가 확인할 수 있는 검증 인프라를 제공하는 것을 목표로 합니다.
-
-## 왜 블록체인을 사용하는가
-
-펫보험 청구 과정에서는 진료기록이 실제로 병원에서 발급된 것인지, 제출 과정에서 변경되지 않았는지, 동일한 진료기록이 중복으로 청구되고 있지는 않은지 확인하기 어렵습니다.
-
-PetChain은 진료기록 원문을 블록체인에 저장하지 않고, 원문의 해시값과 상태 정보만 기록합니다.
-
-이를 통해 개인정보와 민감한 진료정보는 오프체인에 보관하면서도, 진료기록의 위·변조 여부와 검증 이력을 추적할 수 있도록 설계합니다.
-
-## 참여 주체
-
-PetChain은 다음 주체들이 참여하는 구조를 가정합니다.
-
-- 보호자
-- 동물병원
-- 보험사
-- 플랫폼 운영사
-- Hyperledger Fabric 네트워크
-
-각 동물병원과 보험사는 독립적인 조직으로 참여하며, 체인코드 수준에서 청구 건별 접근 권한을 제어합니다.
-
-## 핵심 원칙
-
-- 보험 가입 전 단계에는 관여하지 않는다.
-- 보험상품 추천, 비교, 판매, 중개 기능은 제공하지 않는다.
-- 보험금 산정과 지급 판단은 보험사가 수행한다.
-- 온체인에는 진료기록 원문과 개인정보를 저장하지 않는다.
-- 온체인에는 해시값, 식별자, 상태값, 감사 로그 등 검증에 필요한 최소 정보만 저장한다.
-- 보호자의 동의가 있는 경우에만 보험사가 진료기록 검증을 요청할 수 있다.
-
-## 주의사항
-
-본 프로젝트는 대학 프로젝트 목적으로 작성된 블록체인 기반 서비스 기획 및 구현 프로젝트입니다.
-
-실제 서비스로 운영하기 전에는 보험업법, 개인정보보호법, 전자금융거래법 등 관련 법률에 대한 전문적인 검토가 필요합니다.
-
-## 체인코드
-
-MVP 블록체인 체인코드는 `chaincode/petchain`에 있습니다. Hyperledger Fabric Go 계약으로 작성되어 있으며, 진료기록 해시, 보호자 동의 상태, 제출/검증 결과, 보험사 포인트, 병원 크레딧, 감사 로그 식별자와 해시만 온체인에 기록합니다.
-
-로컬 테스트:
+### 로컬 실행
 
 ```bash
-cd chaincode/petchain
-go test ./...
+cd be/backend
+./gradlew bootRun
 ```
+
+상세 Docker 운영 가이드는 [`docker_guide.md`](docker_guide.md)를 참고해 주세요.
