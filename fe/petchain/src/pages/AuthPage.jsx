@@ -1,7 +1,12 @@
 import { useState } from 'react'
+import { IS_DEMO, goAdmin } from '../demo/env'
 
-function OAuthButtons({ label = '로그인' }) {
-  const go = (provider) => { window.location.href = `/api/auth/oauth/${provider}` }
+function OAuthButtons({ label = '로그인', onDemoLogin }) {
+  // 데모 모드에는 OAuth 리다이렉트를 받아줄 백엔드가 없으므로 보호자 계정으로 바로 로그인시킨다.
+  const go = (provider) => {
+    if (IS_DEMO) { onDemoLogin?.(provider); return }
+    window.location.href = `/api/auth/oauth/${provider}`
+  }
   return (
     <div style={{ marginTop: 8 }}>
       <div className="oauth-divider"><span>또는 소셜 계정으로 {label}</span></div>
@@ -100,11 +105,13 @@ export default function AuthPage({ mode, onLogin, onBack }) {
 
   const ROLE_MAP = { USER: 'guardian', HOSPITAL: 'hospital', INSURANCE: 'insurance', PLATFORM: 'platform' }
 
-  async function handleLogin() {
+  async function handleLogin(credentials) {
     setError('')
     setLoading(true)
     try {
-      const data = await api('/auth/login', { loginId, password: loginPw })
+      // onClick 으로 들어오는 이벤트 객체를 자격증명으로 오인하지 않도록 loginId 유무로 판별한다.
+      const creds = credentials?.loginId ? credentials : { loginId, password: loginPw }
+      const data = await api('/auth/login', creds)
       localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('refreshToken', data.refreshToken)
       localStorage.setItem('memberType', data.memberType)
@@ -125,6 +132,9 @@ export default function AuthPage({ mode, onLogin, onBack }) {
       setLoading(false)
     }
   }
+
+  // 데모 모드의 소셜 로그인 — 목 서버의 보호자 계정으로 진입한다.
+  const handleDemoOAuth = () => handleLogin({ loginId: 'hong@petchain.demo', password: 'demo' })
 
   async function handleGuardianSignup() {
     setError('')
@@ -198,7 +208,11 @@ export default function AuthPage({ mode, onLogin, onBack }) {
           <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1px solid rgba(245,242,236,.12)' }}>
             <div style={{ fontSize: 12, color: 'rgba(245,242,236,.45)', lineHeight: 1.7 }}>
               보험사 · 플랫폼 관리자는<br />
-              <a href="/admin" style={{ color: '#b8885a', textDecoration: 'none', fontWeight: 600 }}>관리자 페이지</a>에서 로그인하세요
+              <a
+                href={IS_DEMO ? '#admin' : '/admin'}
+                onClick={e => { if (IS_DEMO) { e.preventDefault(); goAdmin() } }}
+                style={{ color: '#b8885a', textDecoration: 'none', fontWeight: 600 }}
+              >관리자 페이지</a>에서 로그인하세요
             </div>
           </div>
         </div>
@@ -263,7 +277,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
               >
                 {loading ? '처리 중...' : '로그인'}
               </button>
-              {role === 'guardian' && <OAuthButtons label="로그인" />}
+              {role === 'guardian' && <OAuthButtons label="로그인" onDemoLogin={handleDemoOAuth} />}
             </>
           )}
 
@@ -304,7 +318,7 @@ export default function AuthPage({ mode, onLogin, onBack }) {
               >
                 {loading ? '처리 중...' : '보호자로 가입하기'}
               </button>
-              <OAuthButtons label="가입" />
+              <OAuthButtons label="가입" onDemoLogin={handleDemoOAuth} />
             </>
           )}
 

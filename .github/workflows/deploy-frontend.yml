@@ -1,0 +1,59 @@
+name: Deploy frontend to GitHub Pages
+
+# 포트폴리오용 정적 배포.
+# 백엔드·DB·블록체인 없이 fe/petchain 만 빌드해서 GitHub Pages 로 올린다.
+# 배포된 페이지는 데모 모드로 동작하며 모든 API 응답은 브라우저 내 목 서버가 만든다.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'fe/petchain/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fe/petchain
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: fe/petchain/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: fe/petchain/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

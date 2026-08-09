@@ -7,12 +7,18 @@ import HospitalDash from './pages/hospital/HospitalDash'
 import InsuranceDash from './pages/insurance/InsuranceDash'
 import Platform from './pages/platform/Platform'
 import Toast from './components/common/Toast'
+import DemoBar from './demo/DemoBar'
+import { IS_DEMO, isAdminRoute } from './demo/env'
 import './styles/global.css'
 
 const ROLE_MAP = { USER: 'guardian', HOSPITAL: 'hospital', INSURANCE: 'insurance', PLATFORM: 'platform' }
 
+// 로그아웃·뒤로가기 후 되돌아갈 홈 주소. 정적 배포(하위 경로)에서도 안전하도록 상대 경로를 쓴다.
+const HOME_HREF = './'
+
 function initFromUrl() {
   const params       = new URLSearchParams(window.location.search)
+  const onAdmin      = isAdminRoute()
   const pathname     = window.location.pathname
   const accessToken  = params.get('accessToken')
   const refreshToken = params.get('refreshToken')
@@ -22,8 +28,8 @@ function initFromUrl() {
   const oauthError   = params.get('oauth_error') || params.get('error')
 
   if (oauthError) {
-    window.history.replaceState({}, '', pathname === '/admin' ? '/admin' : '/')
-    return { page: pathname === '/admin' ? 'admin' : 'auth', role: null, toast: { title: 'OAuth 오류', msg: decodeURIComponent(oauthError) } }
+    window.history.replaceState({}, '', pathname + window.location.hash)
+    return { page: onAdmin ? 'admin' : 'auth', role: null, toast: { title: 'OAuth 오류', msg: decodeURIComponent(oauthError) } }
   }
 
   if (accessToken) {
@@ -32,7 +38,7 @@ function initFromUrl() {
     localStorage.setItem('memberType', memberType || 'USER')
     localStorage.setItem('userId', userId || '')
     localStorage.setItem('memberNumber', memberNumber || '')
-    window.history.replaceState({}, '', pathname === '/admin' ? '/admin' : '/')
+    window.history.replaceState({}, '', pathname + window.location.hash)
     const role = ROLE_MAP[memberType?.toUpperCase()] || 'guardian'
     const page = role === 'guardian' ? 'landing' : 'main'
     return { page, role, toast: null }
@@ -42,7 +48,7 @@ function initFromUrl() {
   const mt    = localStorage.getItem('memberType')
   const role  = (token && mt) ? (ROLE_MAP[mt.toUpperCase()] || null) : null
 
-  if (pathname === '/admin') {
+  if (onAdmin) {
     if (role === 'platform' || role === 'insurance') {
       return { page: 'main', role, toast: null }
     }
@@ -154,7 +160,7 @@ function AdminLogin({ onLogin }) {
         </button>
 
         <div style={{ textAlign: 'center', marginTop: 22 }}>
-          <a href="/" style={{ fontSize: 13, color: '#c4a8bc', textDecoration: 'none' }}>← 메인으로 돌아가기</a>
+          <a href={HOME_HREF} style={{ fontSize: 13, color: '#c4a8bc', textDecoration: 'none' }}>← 메인으로 돌아가기</a>
         </div>
       </div>
     </div>
@@ -220,9 +226,9 @@ function Inner() {
     localStorage.removeItem('petchain_insurance_tab')
     setRole(null)
     setInitialTab(null)
-    const targetPage = window.location.pathname === '/admin' ? 'admin' : 'landing'
+    const targetPage = isAdminRoute() ? 'admin' : 'landing'
     setPage(targetPage)
-    window.history.pushState({ page: targetPage, role: null }, '', window.location.pathname)
+    window.history.pushState({ page: targetPage, role: null }, '', window.location.pathname + window.location.hash)
   }
 
   const goAuth = (mode = 'login') => {
@@ -288,6 +294,7 @@ export default function App() {
   return (
     <AppProvider>
       <Inner />
+      {IS_DEMO && <DemoBar />}
     </AppProvider>
   )
 }

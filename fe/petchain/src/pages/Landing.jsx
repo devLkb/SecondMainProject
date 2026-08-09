@@ -50,7 +50,7 @@ const STYLE = `
 }
 .lp-dogs-hero::before {
   content: ''; position: absolute; inset: 0;
-  background: url('/dogs.png') center/cover no-repeat;
+  background: url('dogs.png') center/cover no-repeat;
   z-index: 0;
 }
 .lp-dogs-hero::after {
